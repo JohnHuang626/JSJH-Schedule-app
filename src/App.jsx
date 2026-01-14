@@ -27,7 +27,9 @@ import {
   Settings,
   Filter,
   Download,
-  Printer 
+  Printer,
+  List, // Added List icon
+  Grid  // Added Grid icon
 } from 'lucide-react';
 
 // --- Firebase Configuration & Initialization ---
@@ -61,37 +63,37 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 const DEPARTMENTS = [
   { 
     name: '教務處', 
-    color: 'bg-blue-200 text-blue-900 border-blue-300 print:bg-blue-200 print:text-blue-900 print:border-blue-400',
+    color: 'bg-blue-200 text-blue-900 border-blue-300 print:bg-transparent print:text-black',
     sections: ['教學組', '註冊組', '設備組', '資訊組'] 
   },
   { 
     name: '學務處', 
-    color: 'bg-green-200 text-green-900 border-green-300 print:bg-green-200 print:text-green-900 print:border-green-400',
+    color: 'bg-green-200 text-green-900 border-green-300 print:bg-transparent print:text-black',
     sections: ['訓育組', '生教組', '衛生組', '體育組'] 
   },
   { 
     name: '總務處', 
-    color: 'bg-orange-200 text-orange-900 border-orange-300 print:bg-orange-200 print:text-orange-900 print:border-orange-400',
+    color: 'bg-orange-200 text-orange-900 border-orange-300 print:bg-transparent print:text-black',
     sections: ['文書組', '事務組', '出納組'] 
   },
   { 
     name: '輔導室', 
-    color: 'bg-purple-200 text-purple-900 border-purple-300 print:bg-purple-200 print:text-purple-900 print:border-purple-400',
+    color: 'bg-purple-200 text-purple-900 border-purple-300 print:bg-transparent print:text-black',
     sections: ['輔導組', '資料組', '特教組'] 
   },
   { 
     name: '人事室', 
-    color: 'bg-gray-200 text-gray-900 border-gray-300 print:bg-gray-200 print:text-gray-900 print:border-gray-400',
+    color: 'bg-gray-200 text-gray-900 border-gray-300 print:bg-transparent print:text-black',
     sections: ['人事室'] 
   },
   { 
     name: '主計室', 
-    color: 'bg-gray-200 text-gray-900 border-gray-300 print:bg-gray-200 print:text-gray-900 print:border-gray-400',
+    color: 'bg-gray-200 text-gray-900 border-gray-300 print:bg-transparent print:text-black',
     sections: ['主計室'] 
   },
   { 
     name: '校長室', 
-    color: 'bg-red-200 text-red-900 border-red-300 print:bg-red-200 print:text-red-900 print:border-red-400',
+    color: 'bg-red-200 text-red-900 border-red-300 print:bg-transparent print:text-black',
     sections: ['校長'] 
   }
 ];
@@ -109,6 +111,16 @@ const formatDate = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatDateZH = (dateStr) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const weekDay = WEEKS_ZH[d.getDay()];
+  return `${month}/${day}(${weekDay})`;
+};
+
 const getDatesInRange = (startDate, endDate) => {
   if (!startDate || !endDate) return [];
   const dates = [];
@@ -122,6 +134,21 @@ const getDatesInRange = (startDate, endDate) => {
     currentDate.setDate(currentDate.getDate() + 1);
   }
   return dates;
+};
+
+// Calculate week number relative to start date
+const getWeekInfo = (dateStr, startDateStr) => {
+  const d = new Date(dateStr);
+  const start = new Date(startDateStr);
+  // Adjust start to previous Sunday to align weeks
+  const startDay = start.getDay();
+  const adjustedStart = new Date(start);
+  adjustedStart.setDate(start.getDate() - startDay);
+  
+  const diffTime = Math.abs(d - adjustedStart);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+  // +1 because day 1 is in week 1
+  return Math.floor(diffDays / 7) + 1;
 };
 
 // --- Components ---
@@ -163,6 +190,7 @@ export default function SchoolCalendarApp() {
   const [editingDate, setEditingDate] = useState(null);
   const [newEventContent, setNewEventContent] = useState("");
   const [filterDept, setFilterDept] = useState("ALL");
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
 
   // --- Firebase Auth & Data Sync ---
   useEffect(() => {
@@ -286,9 +314,19 @@ export default function SchoolCalendarApp() {
   };
 
   const handlePrint = () => {
-    window.print();
+    // 強制在列印時使用列表模式 (通常較為正式)
+    const originalMode = viewMode;
+    setViewMode('list');
+    setTimeout(() => {
+      window.print();
+      // Optional: restore view mode after print dialog closes (though user might prefer staying in list)
+      // setViewMode(originalMode);
+    }, 100);
   };
 
+  // --- Data Processing for Views ---
+
+  // 1. Grid View Data: Group by Weeks
   const calendarDays = useMemo(() => {
     if (!config.startDate || !config.endDate) return [];
     
@@ -347,10 +385,21 @@ export default function SchoolCalendarApp() {
   }, [weeksData, filterDept]);
 
 
+  // 2. List View Data: Sorted Events with Week Info
+  const sortedEvents = useMemo(() => {
+    const allEvents = [...events];
+    if (filterDept !== "ALL") {
+      return allEvents
+        .filter(e => e.department === filterDept)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+    }
+    return allEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [events, filterDept]);
+
+
   // --- Render ---
 
   return (
-    // 使用 w-full 確保在各種 iframe 環境下佔滿寬度，並移除 items-center 改用 mx-auto 置中
     <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans print:bg-white">
       
       <style>{`
@@ -364,12 +413,20 @@ export default function SchoolCalendarApp() {
             print-color-adjust: exact !important;
             background-color: white !important;
           }
-          ::-webkit-scrollbar { display: none; }
+          /* Hide non-print elements */
+          .no-print { display: none !important; }
+          /* Ensure table borders show up */
+          table, th, td {
+            border: 1px solid black !important;
+            border-collapse: collapse !important;
+          }
+          /* Ensure list view is visible even if viewMode was grid */
+          .print-visible { display: block !important; }
         }
       `}</style>
 
-      {/* Header: 使用 mx-auto 讓內容置中 */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm print:hidden w-full">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm print:hidden w-full no-print">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center py-4 space-y-4 md:space-y-0">
             
@@ -392,7 +449,27 @@ export default function SchoolCalendarApp() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-3">
+            <div className="flex flex-col md:flex-row items-center space-y-2 md:space-y-0 md:space-x-3">
+              
+              {/* View Toggle */}
+              <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'grid' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <Grid className="w-4 h-4 mr-1.5" />
+                  月曆
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <List className="w-4 h-4 mr-1.5" />
+                  列表
+                </button>
+              </div>
+
+              {/* Identity */}
               <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4 bg-gray-50 p-2 rounded-lg border border-gray-100">
                 <div className="flex items-center space-x-2">
                   <Users className="w-4 h-4 text-gray-400" />
@@ -422,6 +499,7 @@ export default function SchoolCalendarApp() {
                 </div>
               </div>
 
+              {/* Filter */}
               <div className="flex items-center space-x-2">
                 <select 
                   value={filterDept} 
@@ -439,7 +517,7 @@ export default function SchoolCalendarApp() {
                 title="列印行事曆"
               >
                 <Printer className="w-4 h-4 mr-2" />
-                <span className="text-sm">列印 / 存為PDF</span>
+                <span className="text-sm">列印</span>
               </button>
             </div>
 
@@ -447,7 +525,7 @@ export default function SchoolCalendarApp() {
         </div>
       </header>
 
-      {/* Main Content - 使用 mx-auto 確保居中，並設定 w-full */}
+      {/* Main Content */}
       <main className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none print:w-full">
         
         <div className="hidden print:block text-center mb-6">
@@ -457,20 +535,18 @@ export default function SchoolCalendarApp() {
           </p>
         </div>
 
-        <div className="space-y-8 print:space-y-4">
+        {/* --- GRID VIEW (CALENDAR) --- */}
+        <div className={`${viewMode === 'grid' ? 'block' : 'hidden'} print:hidden space-y-8`}>
           {filteredWeeks.map((week, wIndex) => (
-            <div 
-              key={wIndex} 
-              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:rounded-none print:border-black print:break-inside-avoid"
-            >
-              <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex justify-between items-center print:bg-gray-100 print:border-black print:py-1">
-                <span className="font-bold text-gray-800 print:text-black">第 {wIndex + 1} 週</span>
-                <span className="text-xs text-gray-600 print:text-black">
+            <div key={wIndex} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
+                <span className="font-bold text-gray-800">第 {wIndex + 1} 週</span>
+                <span className="text-xs text-gray-600">
                   {formatDate(week[0].dateObj)} - {formatDate(week[week.length-1].dateObj)}
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-7 divide-y md:divide-y-0 md:divide-x divide-gray-100 print:divide-x print:divide-black print:border-collapse">
+              <div className="grid grid-cols-1 md:grid-cols-7 divide-y md:divide-y-0 md:divide-x divide-gray-100">
                 {week.map((day) => {
                   const isWeekend = day.dayOfWeek === 0 || day.dayOfWeek === 6;
                   const displayEvents = filterDept === "ALL" 
@@ -482,17 +558,16 @@ export default function SchoolCalendarApp() {
                       key={day.dateStr} 
                       className={`
                         min-h-[150px] group flex flex-col 
-                        ${isWeekend ? 'bg-gray-100/50 print:bg-gray-100' : 'bg-white'}
-                        ${!day.inSemester ? 'opacity-50 print:opacity-30' : ''}
-                        print:min-h-[100px]
+                        ${isWeekend ? 'bg-gray-100/50' : 'bg-white'}
+                        ${!day.inSemester ? 'opacity-50' : ''}
                       `}
                     >
-                      <div className="p-2 border-b border-gray-100 flex justify-between items-center print:border-gray-300 print:py-1">
+                      <div className="p-2 border-b border-gray-100 flex justify-between items-center">
                         <div className="flex items-center space-x-1">
-                          <span className={`text-sm font-bold ${isWeekend ? 'text-red-600 print:text-black' : 'text-gray-800 print:text-black'}`}>
+                          <span className={`text-sm font-bold ${isWeekend ? 'text-red-600' : 'text-gray-800'}`}>
                             {day.dateObj.getDate()}
                           </span>
-                          <span className="text-xs text-gray-500 print:text-gray-600">
+                          <span className="text-xs text-gray-500">
                             ({WEEKS_ZH[day.dayOfWeek]})
                           </span>
                         </div>
@@ -501,35 +576,34 @@ export default function SchoolCalendarApp() {
                             setEditingDate(day.dateStr);
                             setShowEventModal(true);
                           }}
-                          className="print:hidden opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-indigo-50 rounded text-indigo-600"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-indigo-50 rounded text-indigo-600"
                           title="新增行程"
                         >
                           <Plus className="w-4 h-4" />
                         </button>
                       </div>
 
-                      <div className="p-2 space-y-1.5 flex-1 print:p-1 print:space-y-1">
+                      <div className="p-2 space-y-1.5 flex-1">
                         {displayEvents.map((event) => {
                           const deptConfig = DEPARTMENTS.find(d => d.name === event.department) || DEPARTMENTS[0];
                           return (
                             <div 
                               key={event.id} 
                               className={`
-                                text-xs p-1.5 rounded border ${deptConfig.color} relative group/event
-                                print:border print:text-[10pt] print:p-1 print:leading-tight shadow-sm print:shadow-none
+                                text-xs p-1.5 rounded border ${deptConfig.color} relative group/event shadow-sm
                               `}
                             >
-                              <div className="font-bold mb-0.5 flex justify-between print:mb-0">
-                                <span className="print:font-semibold">{String(event.department)}</span>
+                              <div className="font-bold mb-0.5 flex justify-between">
+                                <span>{String(event.department)}</span>
                                 <button 
                                   onClick={() => handleDeleteEvent(event.id)}
-                                  className="print:hidden hidden group-hover/event:block text-red-700 hover:text-red-900"
+                                  className="hidden group-hover/event:block text-red-700 hover:text-red-900"
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </button>
                               </div>
-                              <div className="whitespace-pre-wrap break-words text-gray-900 print:text-black">
-                                <span className="text-gray-700 mr-1 print:text-black font-medium">[{String(event.section)}]</span>
+                              <div className="whitespace-pre-wrap break-words text-gray-900">
+                                <span className="text-gray-700 mr-1 font-medium">[{String(event.section)}]</span>
                                 {String(event.content)}
                               </div>
                             </div>
@@ -540,14 +614,71 @@ export default function SchoolCalendarApp() {
                   );
                 })}
                 {Array.from({ length: 7 - week.length }).map((_, i) => (
-                   <div key={`empty-${i}`} className="hidden md:block bg-gray-50/30 print:block print:bg-white"></div>
+                   <div key={`empty-${i}`} className="hidden md:block bg-gray-50/30"></div>
                 ))}
               </div>
             </div>
           ))}
         </div>
 
-        {events.length === 0 && (
+        {/* --- LIST VIEW (TABLE - PRINT FORMAT) --- */}
+        <div className={`${viewMode === 'list' ? 'block' : 'hidden'} print:block w-full overflow-x-auto`}>
+           <table className="w-full text-sm text-left border-collapse border border-black">
+             <thead className="bg-gray-100 text-gray-900 font-bold print:bg-gray-100">
+               <tr>
+                 <th className="border border-black px-4 py-2 w-16 text-center">週次</th>
+                 <th className="border border-black px-4 py-2 w-32 text-center">起迄月日</th>
+                 <th className="border border-black px-4 py-2">舉辦事項</th>
+                 <th className="border border-black px-4 py-2 w-32 text-center">主辦單位</th>
+                 <th className="border border-black px-4 py-2 w-32 text-center">協助單位</th>
+                 <th className="border border-black px-4 py-2 w-24 text-center">執行情形</th>
+                 <th className="border border-black px-4 py-2 w-24 text-center">備註</th>
+                 <th className="border border-black px-2 py-2 w-12 text-center no-print">操作</th>
+               </tr>
+             </thead>
+             <tbody>
+               {sortedEvents.length > 0 ? (
+                 sortedEvents.map((event, idx) => (
+                   <tr key={event.id} className="hover:bg-gray-50 print:hover:bg-transparent">
+                     <td className="border border-black px-4 py-2 text-center font-medium">
+                       第{getWeekInfo(event.date, config.startDate)}週
+                     </td>
+                     <td className="border border-black px-4 py-2 text-center">
+                       {formatDateZH(event.date)}
+                     </td>
+                     <td className="border border-black px-4 py-2 whitespace-pre-wrap">
+                       {event.content}
+                     </td>
+                     <td className="border border-black px-4 py-2 text-center">
+                       {event.department}
+                     </td>
+                     <td className="border border-black px-4 py-2 text-center">
+                       {event.section}
+                     </td>
+                     <td className="border border-black px-4 py-2"></td>
+                     <td className="border border-black px-4 py-2"></td>
+                     <td className="border border-black px-2 py-2 text-center no-print">
+                       <button 
+                          onClick={() => handleDeleteEvent(event.id)}
+                          className="text-red-600 hover:text-red-800 p-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                     </td>
+                   </tr>
+                 ))
+               ) : (
+                 <tr>
+                   <td colSpan="8" className="border border-black px-4 py-8 text-center text-gray-500">
+                     目前沒有任何行程資料
+                   </td>
+                 </tr>
+               )}
+             </tbody>
+           </table>
+        </div>
+
+        {events.length === 0 && viewMode === 'grid' && (
           <div className="text-center py-20 text-gray-400 print:hidden">
             <Calendar className="w-16 h-16 mx-auto mb-4 opacity-20" />
             <p>目前沒有任何行程，開始新增吧！</p>
@@ -555,6 +686,7 @@ export default function SchoolCalendarApp() {
         )}
       </main>
 
+      {/* Modals remain the same */}
       <Modal 
         isOpen={showConfigModal} 
         onClose={() => setShowConfigModal(false)}
