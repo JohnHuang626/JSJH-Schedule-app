@@ -768,14 +768,14 @@ export default function SchoolCalendarApp() {
               <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'grid' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                  className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap ${viewMode === 'grid' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                   <Grid className="w-4 h-4 mr-1.5" />
                   月曆
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                  className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap ${viewMode === 'list' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                   <List className="w-4 h-4 mr-1.5" />
                   列表
@@ -825,7 +825,7 @@ export default function SchoolCalendarApp() {
               <div className="flex space-x-2">
                 <button 
                   onClick={handleImportClick}
-                  className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
+                  className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm whitespace-nowrap"
                   title="匯入 CSV"
                 >
                   <Upload className="w-4 h-4 mr-2" />
@@ -841,7 +841,7 @@ export default function SchoolCalendarApp() {
 
                 <button 
                   onClick={handleExportCSV}
-                  className="flex items-center px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-sm"
+                  className="flex items-center px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-sm whitespace-nowrap"
                   title="匯出成 CSV (可由Excel開啟)"
                 >
                   <FileSpreadsheet className="w-4 h-4 mr-2" />
@@ -849,7 +849,7 @@ export default function SchoolCalendarApp() {
                 </button>
                 <button 
                   onClick={handlePrint}
-                  className="flex items-center px-3 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors shadow-sm"
+                  className="flex items-center px-3 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors shadow-sm whitespace-nowrap"
                   title="列印行事曆"
                 >
                   <Printer className="w-4 h-4 mr-2" />
