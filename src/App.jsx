@@ -70,25 +70,25 @@ const DEPARTMENTS = [
     name: '教務處', 
     color: 'bg-red-100 border-red-200', 
     textClass: 'text-red-700 font-bold', 
-    sections: ['教學組', '註冊組', '設備組', '資訊組'] 
+    sections: ['教學組', '註冊組', '設備組', '資訊組', '導師'] 
   },
   { 
     name: '學務處', 
     color: 'bg-pink-100 border-pink-200',
     textClass: 'text-pink-600 font-bold',
-    sections: ['訓育組', '生教組', '衛生組', '體育組'] 
+    sections: ['訓育組', '生教組', '衛生組', '體育組', '導師'] 
   },
   { 
     name: '總務處', 
     color: 'bg-blue-100 border-blue-200',
     textClass: 'text-blue-700 font-bold',
-    sections: ['文書組', '事務組', '出納組'] 
+    sections: ['文書組', '事務組', '出納組', '導師'] 
   },
   { 
     name: '輔導室', 
     color: 'bg-green-100 border-green-200',
     textClass: 'text-green-700 font-bold',
-    sections: ['輔導組', '資料組', '特教組'] 
+    sections: ['輔導組', '資料組', '特教組', '導師'] 
   },
   { 
     name: '人事室', 
