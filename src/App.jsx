@@ -70,43 +70,43 @@ const DEPARTMENTS = [
     name: '教務處', 
     color: 'bg-red-100 border-red-200', 
     textClass: 'text-red-700 font-bold', 
-    sections: ['教學組', '註冊組', '設備組', '資訊組', '導師'] 
+    sections: ['教學組', '註冊組', '設備組', '資訊組', '導師', '各主任', '各處室', '全校'] 
   },
   { 
     name: '學務處', 
     color: 'bg-pink-100 border-pink-200',
     textClass: 'text-pink-600 font-bold',
-    sections: ['訓育組', '生教組', '衛生組', '體育組', '導師'] 
+    sections: ['訓育組', '生教組', '衛生組', '體育組', '導師', '各主任', '各處室', '全校'] 
   },
   { 
     name: '總務處', 
     color: 'bg-blue-100 border-blue-200',
     textClass: 'text-blue-700 font-bold',
-    sections: ['文書組', '事務組', '出納組', '導師'] 
+    sections: ['文書組', '事務組', '出納組', '導師', '各主任', '各處室', '全校'] 
   },
   { 
     name: '輔導室', 
     color: 'bg-green-100 border-green-200',
     textClass: 'text-green-700 font-bold',
-    sections: ['輔導組', '資料組', '特教組', '導師'] 
+    sections: ['輔導組', '資料組', '特教組', '導師', '各主任', '各處室', '全校'] 
   },
   { 
     name: '人事室', 
     color: 'bg-amber-100 border-amber-200', // Amber-100/200 近似淺咖啡色背景
     textClass: 'text-amber-800 font-bold', // Amber-800 近似深咖啡色文字
-    sections: ['人事室'] 
+    sections: ['人事室', '各主任', '各處室', '全校'] 
   },
   { 
     name: '主計室', 
     color: 'bg-purple-100 border-purple-200',
     textClass: 'text-purple-700 font-bold',
-    sections: ['主計室'] 
+    sections: ['主計室', '各主任', '各處室', '全校'] 
   },
   { 
     name: '校長室', 
     color: 'bg-indigo-100 border-indigo-200',
     textClass: 'text-indigo-700 font-bold',
-    sections: ['校長'] 
+    sections: ['校長', '各主任', '各處室', '全校'] 
   }
 ];
 
@@ -291,7 +291,6 @@ export default function SchoolCalendarApp() {
   const [viewMode, setViewMode] = useState('grid'); 
 
   // --- Helper to determine label ---
-  // Modified to use whitespace-nowrap in CSS instead of relying on string content
   const getWeekLabel = (weekNum) => {
     if (weekNum < 1) {
       const preWeekNum = Math.abs(weekNum) + 1;
@@ -532,7 +531,6 @@ export default function SchoolCalendarApp() {
     }
   };
 
-  // UPDATED: handleProcessImport includes logic to skip duplicates
   const handleProcessImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1097,7 +1095,6 @@ export default function SchoolCalendarApp() {
       </Modal>
 
       {/* Config Modal */}
-      {/* ... (keep config modal as is) ... */}
       <Modal 
         isOpen={showConfigModal} 
         onClose={() => setShowConfigModal(false)}
