@@ -33,7 +33,7 @@ import {
   AlertTriangle,
   FileSpreadsheet,
   Upload,
-  Lock // Added Lock icon
+  Lock 
 } from 'lucide-react';
 
 // --- Firebase Configuration & Initialization ---
@@ -284,12 +284,13 @@ export default function SchoolCalendarApp() {
   const [viewMode, setViewMode] = useState('grid'); 
 
   // --- Helper to determine label ---
+  // Modified to remove newline (\n) and allow horizontal layout
   const getWeekLabel = (weekNum) => {
     // 1. Before Semester Start (Countdown Logic)
     if (weekNum < 1) {
-      // weekNum 0 -> Pre 1 (closest to start), weekNum -1 -> Pre 2 (further back)
+      // weekNum 0 -> Pre 1, weekNum -1 -> Pre 2
       const preWeekNum = Math.abs(weekNum) + 1;
-      return `${config.preSemesterLabel || '學期前'}\n第${preWeekNum}週`;
+      return `${config.preSemesterLabel || '學期前'} 第${preWeekNum}週`; // Changed \n to space
     }
 
     // 2. Check if this week is after the semester end date
@@ -298,7 +299,7 @@ export default function SchoolCalendarApp() {
       
       if (weekNum > endWeekNum) {
         const vacationWeekNum = weekNum - endWeekNum;
-        return `${config.postSemesterLabel || '寒假後'}\n第${vacationWeekNum}週`;
+        return `${config.postSemesterLabel || '寒假後'} 第${vacationWeekNum}週`; // Changed \n to space
       }
     }
 
@@ -372,7 +373,6 @@ export default function SchoolCalendarApp() {
             setConfig({
               startDate: String(data.startDate || config.startDate),
               endDate: String(data.endDate || config.endDate),
-              // Map old 'firstWeekDate' to new 'semesterStartDate' if needed
               semesterStartDate: String(data.semesterStartDate || data.firstWeekDate || data.startDate || config.startDate),
               semesterEndDate: String(data.semesterEndDate || config.endDate),
               preSemesterLabel: preLabel,
@@ -399,7 +399,7 @@ export default function SchoolCalendarApp() {
     if (inputPassword === '168') {
       setShowPasswordModal(false);
       setShowConfigModal(true);
-      setInputPassword(""); // Clear password
+      setInputPassword(""); 
     } else {
       alert("密碼錯誤，請重新輸入。");
       setInputPassword("");
@@ -410,7 +410,6 @@ export default function SchoolCalendarApp() {
     e.preventDefault();
     if (!user || !db) return;
     try {
-      // UPDATED: Explicitly construct object with NEW keys only to clean up DB
       const cleanConfig = {
         startDate: config.startDate,
         endDate: config.endDate,
@@ -884,7 +883,7 @@ export default function SchoolCalendarApp() {
             return (
               <div key={wIndex} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
-                  <span className="font-bold text-gray-800 whitespace-pre-line text-sm">{weekLabel.replace('\n', ' ')}</span>
+                  <span className="font-bold text-gray-800 text-sm">{weekLabel}</span>
                   <span className="text-xs text-gray-600">
                     {formatDate(week[0].dateObj)} - {formatDate(week[week.length-1].dateObj)}
                   </span>
@@ -1080,7 +1079,7 @@ export default function SchoolCalendarApp() {
         </form>
       </Modal>
 
-      {/* Modals remain the same */}
+      {/* Config Modal */}
       <Modal 
         isOpen={showConfigModal} 
         onClose={() => setShowConfigModal(false)}
