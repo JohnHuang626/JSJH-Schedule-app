@@ -256,13 +256,14 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 export default function SchoolCalendarApp() {
   const [user, setUser] = useState(null);
   const [events, setEvents] = useState([]);
+  // UPDATED: Completely refreshed initial state with new keys
   const [config, setConfig] = useState({
-    startDate: formatDate(new Date()), // Table start
-    endDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 6))), // Table end
-    semesterStartDate: formatDate(new Date()), // Actual semester start (Week 1)
-    semesterEndDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 4))), // Semester end
-    preSemesterLabel: '學期前', // Label for weeks before semester start
-    postSemesterLabel: '寒假後', // Label for weeks after semester end
+    startDate: formatDate(new Date()), 
+    endDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 6))), 
+    semesterStartDate: formatDate(new Date()), 
+    semesterEndDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 4))), 
+    preSemesterLabel: '學期前', 
+    postSemesterLabel: '寒假後', 
     semesterName: '113學年度第二學期'
   });
   
@@ -394,7 +395,17 @@ export default function SchoolCalendarApp() {
     e.preventDefault();
     if (!user || !db) return;
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_config', 'main_config'), config);
+      // UPDATED: Explicitly construct object with NEW keys only to clean up DB
+      const cleanConfig = {
+        startDate: config.startDate,
+        endDate: config.endDate,
+        semesterStartDate: config.semesterStartDate,
+        semesterEndDate: config.semesterEndDate,
+        preSemesterLabel: config.preSemesterLabel,
+        postSemesterLabel: config.postSemesterLabel,
+        semesterName: config.semesterName
+      };
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_config', 'main_config'), cleanConfig);
       setShowConfigModal(false);
     } catch (err) {
       console.error("Save config failed", err);
