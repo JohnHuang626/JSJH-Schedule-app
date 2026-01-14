@@ -101,7 +101,9 @@ const DEPARTMENTS = [
 ];
 
 const WEEKS_ZH = ['日', '一', '二', '三', '四', '五', '六'];
-const PERIOD_LABELS = ['寒假', '暑假', '開學前', '開學後'];
+// Update labels as requested
+const PRE_PERIOD_LABELS = ['學期前', '寒假前', '暑假前'];
+const POST_PERIOD_LABELS = ['學期後', '寒假後', '暑假後'];
 
 // --- Helper Functions ---
 const formatDate = (date) => {
@@ -259,8 +261,8 @@ export default function SchoolCalendarApp() {
     endDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 6))), // Table end
     semesterStartDate: formatDate(new Date()), // Actual semester start (Week 1)
     semesterEndDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 4))), // Semester end
-    preSemesterLabel: '開學前', // Label for weeks before semester start
-    postSemesterLabel: '寒假', // Label for weeks after semester end
+    preSemesterLabel: '學期前', // Label for weeks before semester start
+    postSemesterLabel: '寒假後', // Label for weeks after semester end
     semesterName: '113學年度第二學期'
   });
   
@@ -279,14 +281,12 @@ export default function SchoolCalendarApp() {
 
   // --- Helper to determine label ---
   const getWeekLabel = (weekNum) => {
-    // 1. Before Semester Start
+    // 1. Before Semester Start (Countdown Logic)
     if (weekNum < 1) {
-      // weekNum 0 -> Pre 1, weekNum -1 -> Pre 2
-      // If semesterStartDate is set correctly, this logic holds.
-      // Note: getWeekInfo calculates relative to semesterStartDate.
-      // If date < semesterStartDate's week, weekNum will be <= 0.
+      // weekNum 0 -> Pre 1 (closest to start), weekNum -1 -> Pre 2 (further back)
+      // This matches "日期比較後面的是前一週，日期比較前面的是前二週"
       const preWeekNum = Math.abs(weekNum) + 1;
-      return `${config.preSemesterLabel || '開學前'}\n第${preWeekNum}週`;
+      return `${config.preSemesterLabel || '學期前'}\n第${preWeekNum}週`;
     }
 
     // 2. Check if this week is after the semester end date
@@ -295,7 +295,7 @@ export default function SchoolCalendarApp() {
       
       if (weekNum > endWeekNum) {
         const vacationWeekNum = weekNum - endWeekNum;
-        return `${config.postSemesterLabel || '寒假'}\n第${vacationWeekNum}週`;
+        return `${config.postSemesterLabel || '寒假後'}\n第${vacationWeekNum}週`;
       }
     }
 
@@ -367,8 +367,8 @@ export default function SchoolCalendarApp() {
               // Map old 'firstWeekDate' to new 'semesterStartDate' if needed
               semesterStartDate: String(data.semesterStartDate || data.firstWeekDate || data.startDate || config.startDate),
               semesterEndDate: String(data.semesterEndDate || config.endDate),
-              preSemesterLabel: String(data.preSemesterLabel || '開學前'),
-              postSemesterLabel: String(data.postSemesterLabel || '寒假'),
+              preSemesterLabel: String(data.preSemesterLabel || '學期前'),
+              postSemesterLabel: String(data.postSemesterLabel || '寒假後'),
               semesterName: String(data.semesterName || config.semesterName)
             });
           }
@@ -1085,7 +1085,7 @@ export default function SchoolCalendarApp() {
                     onChange={(e) => setConfig({...config, preSemesterLabel: e.target.value})}
                     className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                   >
-                    {PERIOD_LABELS.map(label => (
+                    {PRE_PERIOD_LABELS.map(label => (
                       <option key={`pre-${label}`} value={label}>{label}</option>
                     ))}
                   </select>
@@ -1112,7 +1112,7 @@ export default function SchoolCalendarApp() {
                     onChange={(e) => setConfig({...config, postSemesterLabel: e.target.value})}
                     className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                   >
-                    {PERIOD_LABELS.map(label => (
+                    {POST_PERIOD_LABELS.map(label => (
                       <option key={`post-${label}`} value={label}>{label}</option>
                     ))}
                   </select>
