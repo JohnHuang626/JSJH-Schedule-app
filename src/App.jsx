@@ -30,7 +30,8 @@ import {
   Printer,
   List, 
   Grid,
-  AlertTriangle 
+  AlertTriangle,
+  FileSpreadsheet // Added icon for export
 } from 'lucide-react';
 
 // --- Firebase Configuration & Initialization ---
@@ -219,24 +220,20 @@ export default function SchoolCalendarApp() {
   const [viewMode, setViewMode] = useState('grid'); 
 
   // --- Helper to determine label ---
-  // Calculates the display label for a given weekNum based on config
   const getWeekLabel = (weekNum) => {
     // 1. Pre-semester weeks
     if (weekNum < 1) {
-      // weekNum 0 -> Pre 1, weekNum -1 -> Pre 2
       const preWeekNum = Math.abs(weekNum) + 1;
-      return `開學前\n第${preWeekNum}週`;
+      return `開學前第${preWeekNum}週`; // Keep simple for CSV
     }
 
     // 2. Check if this week is after the semester end date
     if (config.semesterEndDate) {
-      // Calculate which week number the semester ends in
       const endWeekNum = getWeekInfo(config.semesterEndDate, config.firstWeekDate);
       
-      // If current week is strictly after the end week
       if (weekNum > endWeekNum) {
         const vacationWeekNum = weekNum - endWeekNum;
-        return `${config.vacationName || '寒假'}\n第${vacationWeekNum}週`;
+        return `${config.vacationName || '寒假'}第${vacationWeekNum}週`;
       }
     }
 
@@ -403,6 +400,58 @@ export default function SchoolCalendarApp() {
     setTimeout(() => {
       window.print();
     }, 100);
+  };
+
+  const handleExportCSV = () => {
+    // 1. Define Headers
+    const headers = ["週次", "日期", "舉辦事項", "主辦單位", "協助單位", "執行情形", "備註"];
+    
+    // 2. Prepare Data Rows
+    const csvRows = [headers.join(',')];
+    
+    // Using processedList logic here to ensure consistency
+    // We recreate the sorted list logic briefly as processedList is not in this scope
+    // Actually, processedList IS available in scope if we define handleExportCSV inside component
+    
+    // However, to ensure we get *all* data or *filtered* data depending on user view,
+    // we should use the same logic. Let's assume WYSIWYG (What You See Is What You Get)
+    // or just export everything? Usually filtering is for view, export might want everything.
+    // But let's follow the current filterDept state to be consistent.
+    
+    let exportEvents = [...events];
+    if (filterDept !== "ALL") {
+      exportEvents = exportEvents.filter(e => e.department === filterDept);
+    }
+    exportEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    exportEvents.forEach(event => {
+      const weekNum = getWeekInfo(event.date, config.firstWeekDate || config.startDate);
+      const weekLabel = getWeekLabel(weekNum).replace('\n', ' '); // Remove newline for CSV
+      const dateStr = formatDateZH(event.date);
+      
+      // Escape content for CSV (handle quotes and commas)
+      const content = `"${event.content.replace(/"/g, '""')}"`;
+      const dept = event.department;
+      const sect = event.section;
+      
+      // Construct row
+      const row = [weekLabel, dateStr, content, dept, sect, "", ""];
+      csvRows.push(row.join(','));
+    });
+
+    // 3. Create Blob with BOM for Excel UTF-8 compatibility
+    const csvString = '\uFEFF' + csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    
+    // 4. Trigger Download
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${config.semesterName}_行事曆.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // --- Data Processing for Views ---
@@ -634,14 +683,24 @@ export default function SchoolCalendarApp() {
                 </select>
               </div>
 
-              <button 
-                onClick={handlePrint}
-                className="flex items-center px-3 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors shadow-sm"
-                title="列印行事曆"
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                <span className="text-sm">列印</span>
-              </button>
+              <div className="flex space-x-2">
+                <button 
+                  onClick={handleExportCSV}
+                  className="flex items-center px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-sm"
+                  title="匯出成 CSV (可由Excel開啟)"
+                >
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  <span className="text-sm">匯出 CSV</span>
+                </button>
+                <button 
+                  onClick={handlePrint}
+                  className="flex items-center px-3 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors shadow-sm"
+                  title="列印行事曆"
+                >
+                  <Printer className="w-4 h-4 mr-2" />
+                  <span className="text-sm">列印</span>
+                </button>
+              </div>
             </div>
 
           </div>
@@ -835,7 +894,7 @@ export default function SchoolCalendarApp() {
         )}
       </main>
 
-      {/* Modals */}
+      {/* Modals remain the same */}
       <Modal 
         isOpen={showConfigModal} 
         onClose={() => setShowConfigModal(false)}
