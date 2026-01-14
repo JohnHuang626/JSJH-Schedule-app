@@ -29,7 +29,8 @@ import {
   Download,
   Printer,
   List, 
-  Grid  
+  Grid,
+  AlertTriangle 
 } from 'lucide-react';
 
 // --- Firebase Configuration & Initialization ---
@@ -151,6 +152,30 @@ const getWeekInfo = (dateStr, startDateStr) => {
   return Math.floor(diffDays / 7) + 1;
 };
 
+// Calculate week date range string (e.g. "02/01~02/07")
+const getWeekRangeString = (weekNum, startDateStr) => {
+  const start = new Date(startDateStr);
+  const startDay = start.getDay();
+  const adjustedStart = new Date(start);
+  adjustedStart.setDate(start.getDate() - startDay); // Start on Sunday
+
+  // Calculate start of specific week
+  const weekStart = new Date(adjustedStart);
+  weekStart.setDate(adjustedStart.getDate() + (weekNum - 1) * 7);
+  
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+
+  const formatSimple = (d) => {
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${m}/${day}`;
+  };
+
+  return `${formatSimple(weekStart)}~${formatSimple(weekEnd)}`;
+};
+
+
 // --- Components ---
 
 // Modal Component
@@ -158,7 +183,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 print:hidden">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-fade-in max-h-[90vh] overflow-y-auto">
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <h3 className="text-lg font-semibold text-gray-800">{String(title || '')}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -313,6 +338,32 @@ export default function SchoolCalendarApp() {
     }
   };
 
+  const handleDeleteAllEvents = async () => {
+    if (!confirm("嚴重警告：此操作將永久刪除「所有」行事曆內容，無法復原！\n\n您確定要清空整個行事曆嗎？")) return;
+    
+    // Double check
+    const doubleCheck = prompt("請輸入「刪除」二字以確認清空所有資料：");
+    if (doubleCheck !== "刪除") {
+      alert("取消刪除操作");
+      return;
+    }
+
+    if (!db) return;
+
+    try {
+      // Deleting all events based on current state list
+      const deletePromises = events.map(event => 
+        deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_events', event.id))
+      );
+      
+      await Promise.all(deletePromises);
+      alert("已成功清空所有行程。");
+    } catch (err) {
+      console.error("Delete all failed", err);
+      alert("刪除失敗，請檢查網路連線或權限。");
+    }
+  };
+
   const handlePrint = () => {
     const originalMode = viewMode;
     setViewMode('list');
@@ -382,16 +433,69 @@ export default function SchoolCalendarApp() {
   }, [weeksData, filterDept]);
 
 
-  // 2. List View Data: Sorted Events with Week Info
-  const sortedEvents = useMemo(() => {
-    const allEvents = [...events];
+  // 2. List View Data: Sorted Events with Merged Cells
+  const processedList = useMemo(() => {
+    // Basic Sort
+    let baseEvents = [...events];
     if (filterDept !== "ALL") {
-      return allEvents
-        .filter(e => e.department === filterDept)
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
+      baseEvents = baseEvents.filter(e => e.department === filterDept);
     }
-    return allEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [events, filterDept]);
+    baseEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (!baseEvents.length) return [];
+
+    // Calculate WeekNum and other metadata first
+    const enriched = baseEvents.map(e => ({
+      ...e,
+      weekNum: getWeekInfo(e.date, config.startDate)
+    }));
+
+    // Calculate RowSpans
+    const result = [];
+    for (let i = 0; i < enriched.length; i++) {
+      const current = { ...enriched[i] }; // Clone to avoid mutation issues
+      
+      // -- Calculate Week RowSpan --
+      // Only verify against previous if previous exists
+      const prev = i > 0 ? enriched[i - 1] : null;
+      
+      // Check if this is the start of a new week block
+      if (!prev || prev.weekNum !== current.weekNum) {
+        // Count how many future events share this weekNum
+        let span = 1;
+        for (let j = i + 1; j < enriched.length; j++) {
+          if (enriched[j].weekNum === current.weekNum) {
+            span++;
+          } else {
+            break;
+          }
+        }
+        current.weekRowSpan = span;
+      } else {
+        current.weekRowSpan = 0; // Means "merged into above"
+      }
+
+      // -- Calculate Date RowSpan --
+      // Check if this is the start of a new date block
+      if (!prev || prev.date !== current.date) {
+        let span = 1;
+        for (let k = i + 1; k < enriched.length; k++) {
+          if (enriched[k].date === current.date) {
+            span++;
+          } else {
+            break;
+          }
+        }
+        current.dateRowSpan = span;
+      } else {
+        current.dateRowSpan = 0;
+      }
+
+      result.push(current);
+    }
+
+    return result;
+  }, [events, filterDept, config.startDate]);
 
 
   // --- Render ---
@@ -620,41 +724,60 @@ export default function SchoolCalendarApp() {
 
         {/* --- LIST VIEW (TABLE - PRINT FORMAT) --- */}
         <div className={`${viewMode === 'list' ? 'block' : 'hidden'} print:block w-full overflow-x-auto`}>
-           <table className="w-full text-sm text-left border-collapse border border-black">
+           <table className="w-full text-sm text-left border-collapse border border-black table-fixed">
              <thead className="bg-gray-100 text-gray-900 font-bold print:bg-gray-100">
                <tr>
-                 <th className="border border-black px-4 py-2 w-16 text-center">週次</th>
-                 <th className="border border-black px-4 py-2 w-32 text-center">起迄月日</th>
-                 <th className="border border-black px-4 py-2">舉辦事項</th>
-                 <th className="border border-black px-4 py-2 w-32 text-center">主辦單位</th>
-                 <th className="border border-black px-4 py-2 w-32 text-center">協助單位</th>
-                 <th className="border border-black px-4 py-2 w-24 text-center">執行情形</th>
-                 <th className="border border-black px-4 py-2 w-24 text-center">備註</th>
-                 <th className="border border-black px-2 py-2 w-12 text-center no-print">操作</th>
+                 <th className="border border-black px-2 py-2 w-24 text-center">週次</th>
+                 <th className="border border-black px-2 py-2 w-24 text-center">日期</th>
+                 <th className="border border-black px-2 py-2 w-auto">舉辦事項</th>
+                 <th className="border border-black px-2 py-2 w-24 text-center">主辦單位</th>
+                 <th className="border border-black px-2 py-2 w-24 text-center">協助單位</th>
+                 <th className="border border-black px-2 py-2 w-20 text-center">執行情形</th>
+                 <th className="border border-black px-2 py-2 w-20 text-center">備註</th>
+                 <th className="border border-black px-2 py-2 w-10 text-center no-print">操作</th>
                </tr>
              </thead>
              <tbody>
-               {sortedEvents.length > 0 ? (
-                 sortedEvents.map((event, idx) => (
+               {processedList.length > 0 ? (
+                 processedList.map((event, idx) => (
                    <tr key={event.id} className="hover:bg-gray-50 print:hover:bg-transparent">
-                     <td className="border border-black px-4 py-2 text-center font-medium">
-                       第{getWeekInfo(event.date, config.startDate)}週
-                     </td>
-                     <td className="border border-black px-4 py-2 text-center">
-                       {formatDateZH(event.date)}
-                     </td>
-                     <td className="border border-black px-4 py-2 whitespace-pre-wrap">
+                     {/* Week Column (Merged) */}
+                     {event.weekRowSpan > 0 && (
+                       <td 
+                         className="border border-black px-2 py-1 text-center font-medium align-top bg-white" 
+                         rowSpan={event.weekRowSpan}
+                       >
+                         <div className="flex flex-col items-center justify-center h-full">
+                           <span className="text-base">第{event.weekNum}週</span>
+                           <span className="text-[10px] text-gray-500 mt-1">
+                             {getWeekRangeString(event.weekNum, config.startDate)}
+                           </span>
+                         </div>
+                       </td>
+                     )}
+                     
+                     {/* Date Column (Merged) */}
+                     {event.dateRowSpan > 0 && (
+                       <td 
+                        className="border border-black px-2 py-1 text-center align-top bg-white"
+                        rowSpan={event.dateRowSpan}
+                       >
+                         {formatDateZH(event.date)}
+                       </td>
+                     )}
+
+                     <td className="border border-black px-2 py-1 whitespace-pre-wrap align-top">
                        {event.content}
                      </td>
-                     <td className="border border-black px-4 py-2 text-center">
+                     <td className="border border-black px-2 py-1 text-center align-top">
                        {event.department}
                      </td>
-                     <td className="border border-black px-4 py-2 text-center">
+                     <td className="border border-black px-2 py-1 text-center align-top">
                        {event.section}
                      </td>
-                     <td className="border border-black px-4 py-2"></td>
-                     <td className="border border-black px-4 py-2"></td>
-                     <td className="border border-black px-2 py-2 text-center no-print">
+                     <td className="border border-black px-2 py-1 align-top"></td>
+                     <td className="border border-black px-2 py-1 align-top"></td>
+                     <td className="border border-black px-1 py-1 text-center no-print align-top">
                        <button 
                           onClick={() => handleDeleteEvent(event.id)}
                           className="text-red-600 hover:text-red-800 p-1"
@@ -689,47 +812,66 @@ export default function SchoolCalendarApp() {
         onClose={() => setShowConfigModal(false)}
         title="行事曆設定"
       >
-        <form onSubmit={handleSaveConfig} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">學期名稱</label>
-            <input 
-              type="text"
-              value={config.semesterName}
-              onChange={(e) => setConfig({...config, semesterName: e.target.value})}
-              className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-6">
+          <form onSubmit={handleSaveConfig} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">開始日期</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">學期名稱</label>
               <input 
-                type="date"
-                value={config.startDate}
-                onChange={(e) => setConfig({...config, startDate: e.target.value})}
+                type="text"
+                value={config.semesterName}
+                onChange={(e) => setConfig({...config, semesterName: e.target.value})}
                 className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">結束日期</label>
-              <input 
-                type="date"
-                value={config.endDate}
-                onChange={(e) => setConfig({...config, endDate: e.target.value})}
-                className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">開始日期</label>
+                <input 
+                  type="date"
+                  value={config.startDate}
+                  onChange={(e) => setConfig({...config, startDate: e.target.value})}
+                  className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">結束日期</label>
+                <input 
+                  type="date"
+                  value={config.endDate}
+                  onChange={(e) => setConfig({...config, endDate: e.target.value})}
+                  className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                />
+              </div>
             </div>
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
+              <p>注意：修改日期範圍可能會導致部分已存在的行程無法在日曆上顯示。</p>
+            </div>
+            <button 
+              type="submit"
+              className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              儲存設定
+            </button>
+          </form>
+
+          {/* Danger Zone */}
+          <div className="border-t border-gray-200 pt-4">
+            <h4 className="text-sm font-bold text-red-600 mb-2 flex items-center">
+              <AlertTriangle className="w-4 h-4 mr-1" />
+              危險區域
+            </h4>
+            <p className="text-xs text-gray-500 mb-3">此操作將清空目前所有的行事曆活動，請謹慎使用。</p>
+            <button 
+              type="button"
+              onClick={handleDeleteAllEvents}
+              className="w-full flex justify-center items-center py-2 px-4 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              刪除所有行程內容
+            </button>
           </div>
-          <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
-            <p>注意：修改日期範圍可能會導致部分已存在的行程無法在日曆上顯示。</p>
-          </div>
-          <button 
-            type="submit"
-            className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            <Save className="w-4 h-4 mr-2" />
-            儲存設定
-          </button>
-        </form>
+        </div>
       </Modal>
 
       <Modal 
