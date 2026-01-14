@@ -60,7 +60,6 @@ try {
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // --- Constants & Data ---
-// 顏色調整：加深背景與文字顏色，增加對比度
 const DEPARTMENTS = [
   { 
     name: '教務處', 
@@ -137,29 +136,29 @@ const getDatesInRange = (startDate, endDate) => {
   return dates;
 };
 
-// Calculate week number relative to start date
-const getWeekInfo = (dateStr, startDateStr) => {
+// Calculate week number relative to the "First Week Date"
+const getWeekInfo = (dateStr, firstWeekDateStr) => {
   const d = new Date(dateStr);
-  const start = new Date(startDateStr);
-  // Adjust start to previous Sunday to align weeks
+  const start = new Date(firstWeekDateStr || dateStr);
+  
   const startDay = start.getDay();
   const adjustedStart = new Date(start);
-  adjustedStart.setDate(start.getDate() - startDay);
+  adjustedStart.setDate(start.getDate() - startDay); // Anchor Sunday
   
-  const diffTime = Math.abs(d - adjustedStart);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-  // +1 because day 1 is in week 1
+  const diffTime = d.getTime() - adjustedStart.getTime();
+  const oneDay = 1000 * 60 * 60 * 24;
+  const diffDays = Math.floor(diffTime / oneDay);
+  
   return Math.floor(diffDays / 7) + 1;
 };
 
-// Calculate week date range string (e.g. "02/01~02/07")
-const getWeekRangeString = (weekNum, startDateStr) => {
-  const start = new Date(startDateStr);
+// Calculate week date range string
+const getWeekRangeString = (weekNum, firstWeekDateStr) => {
+  const start = new Date(firstWeekDateStr);
   const startDay = start.getDay();
   const adjustedStart = new Date(start);
-  adjustedStart.setDate(start.getDate() - startDay); // Start on Sunday
+  adjustedStart.setDate(start.getDate() - startDay); // Anchor Sunday
 
-  // Calculate start of specific week
   const weekStart = new Date(adjustedStart);
   weekStart.setDate(adjustedStart.getDate() + (weekNum - 1) * 7);
   
@@ -174,7 +173,6 @@ const getWeekRangeString = (weekNum, startDateStr) => {
 
   return `${formatSimple(weekStart)}~${formatSimple(weekEnd)}`;
 };
-
 
 // --- Components ---
 
@@ -204,6 +202,9 @@ export default function SchoolCalendarApp() {
   const [config, setConfig] = useState({
     startDate: formatDate(new Date()),
     endDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 6))),
+    firstWeekDate: formatDate(new Date()),
+    semesterEndDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 4))), // Default ~4 months sem
+    vacationName: '寒假', // '寒假' or '暑假'
     semesterName: '113學年度第二學期'
   });
   
@@ -215,7 +216,33 @@ export default function SchoolCalendarApp() {
   const [editingDate, setEditingDate] = useState(null);
   const [newEventContent, setNewEventContent] = useState("");
   const [filterDept, setFilterDept] = useState("ALL");
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [viewMode, setViewMode] = useState('grid'); 
+
+  // --- Helper to determine label ---
+  // Calculates the display label for a given weekNum based on config
+  const getWeekLabel = (weekNum) => {
+    // 1. Pre-semester weeks
+    if (weekNum < 1) {
+      // weekNum 0 -> Pre 1, weekNum -1 -> Pre 2
+      const preWeekNum = Math.abs(weekNum) + 1;
+      return `開學前\n第${preWeekNum}週`;
+    }
+
+    // 2. Check if this week is after the semester end date
+    if (config.semesterEndDate) {
+      // Calculate which week number the semester ends in
+      const endWeekNum = getWeekInfo(config.semesterEndDate, config.firstWeekDate);
+      
+      // If current week is strictly after the end week
+      if (weekNum > endWeekNum) {
+        const vacationWeekNum = weekNum - endWeekNum;
+        return `${config.vacationName || '寒假'}\n第${vacationWeekNum}週`;
+      }
+    }
+
+    // 3. Normal semester week
+    return `第${weekNum}週`;
+  };
 
   // --- Firebase Auth & Data Sync ---
   useEffect(() => {
@@ -278,6 +305,9 @@ export default function SchoolCalendarApp() {
             setConfig({
               startDate: String(data.startDate || config.startDate),
               endDate: String(data.endDate || config.endDate),
+              firstWeekDate: String(data.firstWeekDate || data.startDate || config.startDate),
+              semesterEndDate: String(data.semesterEndDate || config.endDate), // Load or default
+              vacationName: String(data.vacationName || '寒假'), // Load or default
               semesterName: String(data.semesterName || config.semesterName)
             });
           }
@@ -299,7 +329,12 @@ export default function SchoolCalendarApp() {
     e.preventDefault();
     if (!user || !db) return;
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_config', 'main_config'), config);
+      const newConfig = {
+        ...config,
+        firstWeekDate: config.firstWeekDate || config.startDate,
+        semesterEndDate: config.semesterEndDate || config.endDate
+      };
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_config', 'main_config'), newConfig);
       setShowConfigModal(false);
     } catch (err) {
       console.error("Save config failed", err);
@@ -341,7 +376,6 @@ export default function SchoolCalendarApp() {
   const handleDeleteAllEvents = async () => {
     if (!confirm("嚴重警告：此操作將永久刪除「所有」行事曆內容，無法復原！\n\n您確定要清空整個行事曆嗎？")) return;
     
-    // Double check
     const doubleCheck = prompt("請輸入「刪除」二字以確認清空所有資料：");
     if (doubleCheck !== "刪除") {
       alert("取消刪除操作");
@@ -351,7 +385,6 @@ export default function SchoolCalendarApp() {
     if (!db) return;
 
     try {
-      // Deleting all events based on current state list
       const deletePromises = events.map(event => 
         deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_events', event.id))
       );
@@ -398,20 +431,22 @@ export default function SchoolCalendarApp() {
         const dateStr = formatDate(date);
         const dayEvents = events.filter(e => e.date === dateStr);
         const inSemester = dateStr >= config.startDate && dateStr <= config.endDate;
+        const weekNum = getWeekInfo(dateStr, config.firstWeekDate || config.startDate);
 
         return {
           dateObj: date,
           dateStr,
           dayOfWeek: date.getDay(),
           events: dayEvents,
-          inSemester
+          inSemester,
+          weekNum
         };
       });
     } catch (e) {
       console.error("Error generating calendar days:", e);
       return [];
     }
-  }, [config.startDate, config.endDate, events]);
+  }, [config.startDate, config.endDate, config.firstWeekDate, events]);
 
   const weeksData = useMemo(() => {
     const weeks = [];
@@ -435,7 +470,6 @@ export default function SchoolCalendarApp() {
 
   // 2. List View Data: Sorted Events with Merged Cells
   const processedList = useMemo(() => {
-    // Basic Sort
     let baseEvents = [...events];
     if (filterDept !== "ALL") {
       baseEvents = baseEvents.filter(e => e.department === filterDept);
@@ -444,24 +478,20 @@ export default function SchoolCalendarApp() {
 
     if (!baseEvents.length) return [];
 
-    // Calculate WeekNum and other metadata first
+    const anchorDate = config.firstWeekDate || config.startDate;
     const enriched = baseEvents.map(e => ({
       ...e,
-      weekNum: getWeekInfo(e.date, config.startDate)
+      weekNum: getWeekInfo(e.date, anchorDate)
     }));
 
-    // Calculate RowSpans
     const result = [];
     for (let i = 0; i < enriched.length; i++) {
-      const current = { ...enriched[i] }; // Clone to avoid mutation issues
+      const current = { ...enriched[i] }; 
       
       // -- Calculate Week RowSpan --
-      // Only verify against previous if previous exists
       const prev = i > 0 ? enriched[i - 1] : null;
       
-      // Check if this is the start of a new week block
       if (!prev || prev.weekNum !== current.weekNum) {
-        // Count how many future events share this weekNum
         let span = 1;
         for (let j = i + 1; j < enriched.length; j++) {
           if (enriched[j].weekNum === current.weekNum) {
@@ -472,11 +502,10 @@ export default function SchoolCalendarApp() {
         }
         current.weekRowSpan = span;
       } else {
-        current.weekRowSpan = 0; // Means "merged into above"
+        current.weekRowSpan = 0; 
       }
 
       // -- Calculate Date RowSpan --
-      // Check if this is the start of a new date block
       if (!prev || prev.date !== current.date) {
         let span = 1;
         for (let k = i + 1; k < enriched.length; k++) {
@@ -495,7 +524,7 @@ export default function SchoolCalendarApp() {
     }
 
     return result;
-  }, [events, filterDept, config.startDate]);
+  }, [events, filterDept, config.startDate, config.firstWeekDate]);
 
 
   // --- Render ---
@@ -514,14 +543,11 @@ export default function SchoolCalendarApp() {
             print-color-adjust: exact !important;
             background-color: white !important;
           }
-          /* Hide non-print elements */
           .no-print { display: none !important; }
-          /* Ensure table borders show up */
           table, th, td {
             border: 1px solid black !important;
             border-collapse: collapse !important;
           }
-          /* Ensure list view is visible even if viewMode was grid */
           .print-visible { display: block !important; }
         }
       `}</style>
@@ -551,8 +577,6 @@ export default function SchoolCalendarApp() {
             </div>
 
             <div className="flex flex-col md:flex-row items-center space-y-2 md:space-y-0 md:space-x-3">
-              
-              {/* View Toggle */}
               <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
                 <button
                   onClick={() => setViewMode('grid')}
@@ -570,7 +594,6 @@ export default function SchoolCalendarApp() {
                 </button>
               </div>
 
-              {/* Identity */}
               <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4 bg-gray-50 p-2 rounded-lg border border-gray-100">
                 <div className="flex items-center space-x-2">
                   <Users className="w-4 h-4 text-gray-400" />
@@ -600,7 +623,6 @@ export default function SchoolCalendarApp() {
                 </div>
               </div>
 
-              {/* Filter */}
               <div className="flex items-center space-x-2">
                 <select 
                   value={filterDept} 
@@ -638,88 +660,93 @@ export default function SchoolCalendarApp() {
 
         {/* --- GRID VIEW (CALENDAR) --- */}
         <div className={`${viewMode === 'grid' ? 'block' : 'hidden'} print:hidden space-y-8`}>
-          {filteredWeeks.map((week, wIndex) => (
-            <div key={wIndex} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
-                <span className="font-bold text-gray-800">第 {wIndex + 1} 週</span>
-                <span className="text-xs text-gray-600">
-                  {formatDate(week[0].dateObj)} - {formatDate(week[week.length-1].dateObj)}
-                </span>
-              </div>
+          {filteredWeeks.map((week, wIndex) => {
+            const weekNum = week[0].weekNum;
+            const weekLabel = getWeekLabel(weekNum);
+            
+            return (
+              <div key={wIndex} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
+                  <span className="font-bold text-gray-800 whitespace-pre-line text-sm">{weekLabel.replace('\n', ' ')}</span>
+                  <span className="text-xs text-gray-600">
+                    {formatDate(week[0].dateObj)} - {formatDate(week[week.length-1].dateObj)}
+                  </span>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-7 divide-y md:divide-y-0 md:divide-x divide-gray-100">
-                {week.map((day) => {
-                  const isWeekend = day.dayOfWeek === 0 || day.dayOfWeek === 6;
-                  const displayEvents = filterDept === "ALL" 
-                    ? day.events 
-                    : day.events.filter(e => e.department === filterDept);
+                <div className="grid grid-cols-1 md:grid-cols-7 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                  {week.map((day) => {
+                    const isWeekend = day.dayOfWeek === 0 || day.dayOfWeek === 6;
+                    const displayEvents = filterDept === "ALL" 
+                      ? day.events 
+                      : day.events.filter(e => e.department === filterDept);
 
-                  return (
-                    <div 
-                      key={day.dateStr} 
-                      className={`
-                        min-h-[150px] group flex flex-col 
-                        ${isWeekend ? 'bg-gray-100/50' : 'bg-white'}
-                        ${!day.inSemester ? 'opacity-50' : ''}
-                      `}
-                    >
-                      <div className="p-2 border-b border-gray-100 flex justify-between items-center">
-                        <div className="flex items-center space-x-1">
-                          <span className={`text-sm font-bold ${isWeekend ? 'text-red-600' : 'text-gray-800'}`}>
-                            {day.dateObj.getDate()}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            ({WEEKS_ZH[day.dayOfWeek]})
-                          </span>
+                    return (
+                      <div 
+                        key={day.dateStr} 
+                        className={`
+                          min-h-[150px] group flex flex-col 
+                          ${isWeekend ? 'bg-gray-100/50' : 'bg-white'}
+                          ${!day.inSemester ? 'opacity-50' : ''}
+                        `}
+                      >
+                        <div className="p-2 border-b border-gray-100 flex justify-between items-center">
+                          <div className="flex items-center space-x-1">
+                            <span className={`text-sm font-bold ${isWeekend ? 'text-red-600' : 'text-gray-800'}`}>
+                              {day.dateObj.getDate()}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              ({WEEKS_ZH[day.dayOfWeek]})
+                            </span>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              setEditingDate(day.dateStr);
+                              setShowEventModal(true);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-indigo-50 rounded text-indigo-600"
+                            title="新增行程"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
                         </div>
-                        <button 
-                          onClick={() => {
-                            setEditingDate(day.dateStr);
-                            setShowEventModal(true);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-indigo-50 rounded text-indigo-600"
-                          title="新增行程"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
 
-                      <div className="p-2 space-y-1.5 flex-1">
-                        {displayEvents.map((event) => {
-                          const deptConfig = DEPARTMENTS.find(d => d.name === event.department) || DEPARTMENTS[0];
-                          return (
-                            <div 
-                              key={event.id} 
-                              className={`
-                                text-xs p-1.5 rounded border ${deptConfig.color} relative group/event shadow-sm
-                              `}
-                            >
-                              <div className="font-bold mb-0.5 flex justify-between">
-                                <span>{String(event.department)}</span>
-                                <button 
-                                  onClick={() => handleDeleteEvent(event.id)}
-                                  className="hidden group-hover/event:block text-red-700 hover:text-red-900"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
+                        <div className="p-2 space-y-1.5 flex-1">
+                          {displayEvents.map((event) => {
+                            const deptConfig = DEPARTMENTS.find(d => d.name === event.department) || DEPARTMENTS[0];
+                            return (
+                              <div 
+                                key={event.id} 
+                                className={`
+                                  text-xs p-1.5 rounded border ${deptConfig.color} relative group/event shadow-sm
+                                `}
+                              >
+                                <div className="font-bold mb-0.5 flex justify-between">
+                                  <span>{String(event.department)}</span>
+                                  <button 
+                                    onClick={() => handleDeleteEvent(event.id)}
+                                    className="hidden group-hover/event:block text-red-700 hover:text-red-900"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                                <div className="whitespace-pre-wrap break-words text-gray-900">
+                                  <span className="text-gray-700 mr-1 font-medium">[{String(event.section)}]</span>
+                                  {String(event.content)}
+                                </div>
                               </div>
-                              <div className="whitespace-pre-wrap break-words text-gray-900">
-                                <span className="text-gray-700 mr-1 font-medium">[{String(event.section)}]</span>
-                                {String(event.content)}
-                              </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-                {Array.from({ length: 7 - week.length }).map((_, i) => (
-                   <div key={`empty-${i}`} className="hidden md:block bg-gray-50/30"></div>
-                ))}
+                    );
+                  })}
+                  {Array.from({ length: 7 - week.length }).map((_, i) => (
+                     <div key={`empty-${i}`} className="hidden md:block bg-gray-50/30"></div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* --- LIST VIEW (TABLE - PRINT FORMAT) --- */}
@@ -748,9 +775,11 @@ export default function SchoolCalendarApp() {
                          rowSpan={event.weekRowSpan}
                        >
                          <div className="flex flex-col items-center justify-center h-full">
-                           <span className="text-base">第{event.weekNum}週</span>
+                           <span className="text-base whitespace-pre-line leading-tight">
+                             {getWeekLabel(event.weekNum)}
+                           </span>
                            <span className="text-[10px] text-gray-500 mt-1">
-                             {getWeekRangeString(event.weekNum, config.startDate)}
+                             {getWeekRangeString(event.weekNum, config.firstWeekDate || config.startDate)}
                            </span>
                          </div>
                        </td>
@@ -806,7 +835,7 @@ export default function SchoolCalendarApp() {
         )}
       </main>
 
-      {/* Modals remain the same */}
+      {/* Modals */}
       <Modal 
         isOpen={showConfigModal} 
         onClose={() => setShowConfigModal(false)}
@@ -823,29 +852,83 @@ export default function SchoolCalendarApp() {
                 className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">開始日期</label>
-                <input 
-                  type="date"
-                  value={config.startDate}
-                  onChange={(e) => setConfig({...config, startDate: e.target.value})}
-                  className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
+            
+            <div className="border-t border-gray-200 pt-4 mt-2">
+              <h4 className="text-sm font-bold text-gray-800 mb-3">學期起訖與階段設定</h4>
+              
+              {/* Row 1: Overall Range */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">表格開始日期</label>
+                  <input 
+                    type="date"
+                    value={config.startDate}
+                    onChange={(e) => setConfig({...config, startDate: e.target.value})}
+                    className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">表格結束日期</label>
+                  <input 
+                    type="date"
+                    value={config.endDate}
+                    onChange={(e) => setConfig({...config, endDate: e.target.value})}
+                    className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">結束日期</label>
-                <input 
-                  type="date"
-                  value={config.endDate}
-                  onChange={(e) => setConfig({...config, endDate: e.target.value})}
-                  className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
+
+              {/* Row 2: Key Academic Dates */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    第一週(開學)開始日
+                    <span className="ml-2 text-xs text-blue-600 font-normal">此前為預備週</span>
+                  </label>
+                  <input 
+                    type="date"
+                    value={config.firstWeekDate || config.startDate}
+                    onChange={(e) => setConfig({...config, firstWeekDate: e.target.value})}
+                    className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border-l-4 border-l-blue-500"
+                  />
+                </div>
+                
+                <div className="flex space-x-2">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      學期結束日
+                      <span className="ml-2 text-xs text-orange-600 font-normal">此後為假期</span>
+                    </label>
+                    <input 
+                      type="date"
+                      value={config.semesterEndDate || config.endDate}
+                      onChange={(e) => setConfig({...config, semesterEndDate: e.target.value})}
+                      className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border-l-4 border-l-orange-500"
+                    />
+                  </div>
+                  <div className="w-1/3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">假期名稱</label>
+                    <select
+                      value={config.vacationName}
+                      onChange={(e) => setConfig({...config, vacationName: e.target.value})}
+                      className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    >
+                      <option value="寒假">寒假</option>
+                      <option value="暑假">暑假</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
-              <p>注意：修改日期範圍可能會導致部分已存在的行程無法在日曆上顯示。</p>
+
+            <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-800">
+              <ul className="list-disc list-inside space-y-1">
+                <li>第一週開始日之前 = <strong>開學前第X週</strong></li>
+                <li>第一週開始日 ~ 學期結束日 = <strong>第X週</strong></li>
+                <li>學期結束日之後 = <strong>{config.vacationName || '寒假'}第X週</strong></li>
+              </ul>
             </div>
+
             <button 
               type="submit"
               className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
