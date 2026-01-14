@@ -32,7 +32,8 @@ import {
   Grid,
   AlertTriangle,
   FileSpreadsheet,
-  Upload 
+  Upload,
+  Lock // Added Lock icon
 } from 'lucide-react';
 
 // --- Firebase Configuration & Initialization ---
@@ -275,6 +276,8 @@ export default function SchoolCalendarApp() {
   const [selectedSection, setSelectedSection] = useState(DEPARTMENTS[0].sections[0]);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false); // New state for password modal
+  const [inputPassword, setInputPassword] = useState(""); // New state for password input
   const [editingDate, setEditingDate] = useState(null);
   const [newEventContent, setNewEventContent] = useState("");
   const [filterDept, setFilterDept] = useState("ALL");
@@ -390,6 +393,18 @@ export default function SchoolCalendarApp() {
   }, [user]);
 
   // --- Logic ---
+
+  const handleVerifyPassword = (e) => {
+    e.preventDefault();
+    if (inputPassword === '168') {
+      setShowPasswordModal(false);
+      setShowConfigModal(true);
+      setInputPassword(""); // Clear password
+    } else {
+      alert("密碼錯誤，請重新輸入。");
+      setInputPassword("");
+    }
+  };
 
   const handleSaveConfig = async (e) => {
     e.preventDefault();
@@ -730,7 +745,7 @@ export default function SchoolCalendarApp() {
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm print:hidden w-full no-print flex justify-center">
-        <div className="w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
+        <div className="w-[95%] max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center py-4 space-y-4 md:space-y-0">
             
             <div className="flex items-center space-x-3">
@@ -741,7 +756,7 @@ export default function SchoolCalendarApp() {
                 <h1 className="text-xl font-bold text-gray-900 leading-tight">學校行事曆協作平台</h1>
                 <div 
                   className="flex items-center space-x-2 text-sm text-gray-500 cursor-pointer hover:text-indigo-600 transition-colors"
-                  onClick={() => setShowConfigModal(true)}
+                  onClick={() => setShowPasswordModal(true)}
                 >
                   <span>{String(config.semesterName || '')}</span>
                   <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">
@@ -851,7 +866,7 @@ export default function SchoolCalendarApp() {
       </header>
 
       {/* Main Content */}
-      <main className="w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none print:w-full">
+      <main className="w-[95%] max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none print:w-full">
         
         <div className="hidden print:block text-center mb-6">
           <h1 className="text-2xl font-serif font-bold text-black">{String(config.semesterName)} 行事曆</h1>
@@ -1036,6 +1051,34 @@ export default function SchoolCalendarApp() {
           </div>
         )}
       </main>
+
+      {/* Password Modal */}
+      <Modal 
+        isOpen={showPasswordModal} 
+        onClose={() => { setShowPasswordModal(false); setInputPassword(""); }}
+        title="請輸入管理密碼"
+      >
+        <form onSubmit={handleVerifyPassword} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">密碼</label>
+            <input 
+              type="password"
+              value={inputPassword}
+              onChange={(e) => setInputPassword(e.target.value)}
+              className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              placeholder="請輸入密碼"
+              autoFocus
+            />
+          </div>
+          <button 
+            type="submit"
+            className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <Lock className="w-4 h-4 mr-2" />
+            驗證
+          </button>
+        </form>
+      </Modal>
 
       {/* Modals remain the same */}
       <Modal 
