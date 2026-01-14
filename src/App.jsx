@@ -284,7 +284,6 @@ export default function SchoolCalendarApp() {
     // 1. Before Semester Start (Countdown Logic)
     if (weekNum < 1) {
       // weekNum 0 -> Pre 1 (closest to start), weekNum -1 -> Pre 2 (further back)
-      // This matches "日期比較後面的是前一週，日期比較前面的是前二週"
       const preWeekNum = Math.abs(weekNum) + 1;
       return `${config.preSemesterLabel || '學期前'}\n第${preWeekNum}週`;
     }
@@ -361,13 +360,18 @@ export default function SchoolCalendarApp() {
           const serverConfig = snapshot.docs.find(d => d.id === 'main_config');
           if (serverConfig) {
             const data = serverConfig.data();
+            
+            // Fix migration from old default '開學前' to new '學期前'
+            let preLabel = String(data.preSemesterLabel || '學期前');
+            if (preLabel === '開學前') preLabel = '學期前';
+
             setConfig({
               startDate: String(data.startDate || config.startDate),
               endDate: String(data.endDate || config.endDate),
               // Map old 'firstWeekDate' to new 'semesterStartDate' if needed
               semesterStartDate: String(data.semesterStartDate || data.firstWeekDate || data.startDate || config.startDate),
               semesterEndDate: String(data.semesterEndDate || config.endDate),
-              preSemesterLabel: String(data.preSemesterLabel || '學期前'),
+              preSemesterLabel: preLabel,
               postSemesterLabel: String(data.postSemesterLabel || '寒假後'),
               semesterName: String(data.semesterName || config.semesterName)
             });
