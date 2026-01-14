@@ -31,7 +31,6 @@ import {
 } from 'lucide-react';
 
 // --- Firebase Configuration & Initialization ---
-// 修正：優先使用環境變數提供的設定，若無才使用寫死的備用設定
 const fallbackConfig = {
   apiKey: "AIzaSyBEiI-Vi30LpEg084T31WfPS7bcNaKOp6Q",
   authDomain: "jsjh-schedule-app.firebaseapp.com",
@@ -58,40 +57,41 @@ try {
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // --- Constants & Data ---
+// 顏色調整：加深背景與文字顏色，增加對比度
 const DEPARTMENTS = [
   { 
     name: '教務處', 
-    color: 'bg-blue-100 text-blue-800 border-blue-200 print:bg-blue-100 print:text-blue-900 print:border-blue-300',
+    color: 'bg-blue-200 text-blue-900 border-blue-300 print:bg-blue-200 print:text-blue-900 print:border-blue-400',
     sections: ['教學組', '註冊組', '設備組', '資訊組'] 
   },
   { 
     name: '學務處', 
-    color: 'bg-green-100 text-green-800 border-green-200 print:bg-green-100 print:text-green-900 print:border-green-300',
+    color: 'bg-green-200 text-green-900 border-green-300 print:bg-green-200 print:text-green-900 print:border-green-400',
     sections: ['訓育組', '生教組', '衛生組', '體育組'] 
   },
   { 
     name: '總務處', 
-    color: 'bg-orange-100 text-orange-800 border-orange-200 print:bg-orange-100 print:text-orange-900 print:border-orange-300',
+    color: 'bg-orange-200 text-orange-900 border-orange-300 print:bg-orange-200 print:text-orange-900 print:border-orange-400',
     sections: ['文書組', '事務組', '出納組'] 
   },
   { 
     name: '輔導室', 
-    color: 'bg-purple-100 text-purple-800 border-purple-200 print:bg-purple-100 print:text-purple-900 print:border-purple-300',
+    color: 'bg-purple-200 text-purple-900 border-purple-300 print:bg-purple-200 print:text-purple-900 print:border-purple-400',
     sections: ['輔導組', '資料組', '特教組'] 
   },
   { 
     name: '人事室', 
-    color: 'bg-gray-100 text-gray-800 border-gray-200 print:bg-gray-100 print:text-gray-900 print:border-gray-300',
+    color: 'bg-gray-200 text-gray-900 border-gray-300 print:bg-gray-200 print:text-gray-900 print:border-gray-400',
     sections: ['人事室'] 
   },
   { 
     name: '主計室', 
-    color: 'bg-gray-100 text-gray-800 border-gray-200 print:bg-gray-100 print:text-gray-900 print:border-gray-300',
+    color: 'bg-gray-200 text-gray-900 border-gray-300 print:bg-gray-200 print:text-gray-900 print:border-gray-400',
     sections: ['主計室'] 
   },
   { 
     name: '校長室', 
-    color: 'bg-red-100 text-red-800 border-red-200 print:bg-red-100 print:text-red-900 print:border-red-300',
+    color: 'bg-red-200 text-red-900 border-red-300 print:bg-red-200 print:text-red-900 print:border-red-400',
     sections: ['校長'] 
   }
 ];
@@ -133,7 +133,6 @@ const Modal = ({ isOpen, onClose, title, children }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 print:hidden">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-          {/* 強制轉型為字串，避免 React 渲染物件錯誤 */}
           <h3 className="text-lg font-semibold text-gray-800">{String(title || '')}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <span className="text-2xl">&times;</span>
@@ -167,7 +166,6 @@ export default function SchoolCalendarApp() {
 
   // --- Firebase Auth & Data Sync ---
   useEffect(() => {
-    // 增加安全檢查，確保 auth 已初始化
     if (!auth) {
       console.error("Firebase Auth service not available");
       return;
@@ -177,11 +175,9 @@ export default function SchoolCalendarApp() {
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           try {
-            // 嘗試使用 Custom Token 登入
             await signInWithCustomToken(auth, __initial_auth_token);
           } catch (tokenError) {
             console.warn("Custom token mismatch or invalid, falling back to anonymous auth:", tokenError);
-            // 如果 Token 錯誤（例如 Mismatch），自動降級為匿名登入
             await signInAnonymously(auth);
           }
         } else {
@@ -208,7 +204,6 @@ export default function SchoolCalendarApp() {
       const unsubEvents = onSnapshot(qEvents, (snapshot) => {
         const loadedEvents = snapshot.docs.map(doc => {
           const data = doc.data();
-          // 關鍵修正：確保所有渲染的欄位都是字串，避免 Objects are not valid as a React child 錯誤
           return { 
             id: doc.id, 
             ...data,
@@ -263,7 +258,7 @@ export default function SchoolCalendarApp() {
 
     const newEvent = {
       date: editingDate,
-      content: String(newEventContent), // 確保儲存前為字串
+      content: String(newEventContent), 
       department: selectedDept.name,
       section: selectedSection,
       timestamp: Date.now(),
@@ -294,7 +289,6 @@ export default function SchoolCalendarApp() {
     window.print();
   };
 
-  // Generate Calendar Days with Padding (Always Start Sun, End Sat)
   const calendarDays = useMemo(() => {
     if (!config.startDate || !config.endDate) return [];
     
@@ -333,7 +327,6 @@ export default function SchoolCalendarApp() {
     }
   }, [config.startDate, config.endDate, events]);
 
-  // Group by Weeks for List View
   const weeksData = useMemo(() => {
     const weeks = [];
     let currentWeek = [];
@@ -357,9 +350,9 @@ export default function SchoolCalendarApp() {
   // --- Render ---
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans print:bg-white">
+    // 使用 w-full 確保在各種 iframe 環境下佔滿寬度，並移除 items-center 改用 mx-auto 置中
+    <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans print:bg-white">
       
-      {/* Print-specific Styles */}
       <style>{`
         @media print {
           @page {
@@ -371,17 +364,15 @@ export default function SchoolCalendarApp() {
             print-color-adjust: exact !important;
             background-color: white !important;
           }
-          /* Hide scrollbars */
           ::-webkit-scrollbar { display: none; }
         }
       `}</style>
 
-      {/* Header - Hidden on Print */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm print:hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* Header: 使用 mx-auto 讓內容置中 */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm print:hidden w-full">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center py-4 space-y-4 md:space-y-0">
             
-            {/* Title & Config Trigger */}
             <div className="flex items-center space-x-3">
               <div className="p-2 bg-indigo-600 rounded-lg shadow-lg">
                 <Calendar className="w-6 h-6 text-white" />
@@ -392,7 +383,6 @@ export default function SchoolCalendarApp() {
                   className="flex items-center space-x-2 text-sm text-gray-500 cursor-pointer hover:text-indigo-600 transition-colors"
                   onClick={() => setShowConfigModal(true)}
                 >
-                  {/* Safety check for rendering */}
                   <span>{String(config.semesterName || '')}</span>
                   <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">
                     {String(config.startDate)} ~ {String(config.endDate)}
@@ -402,9 +392,7 @@ export default function SchoolCalendarApp() {
               </div>
             </div>
 
-            {/* Controls */}
             <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-3">
-              {/* User Identity Selector */}
               <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4 bg-gray-50 p-2 rounded-lg border border-gray-100">
                 <div className="flex items-center space-x-2">
                   <Users className="w-4 h-4 text-gray-400" />
@@ -434,7 +422,6 @@ export default function SchoolCalendarApp() {
                 </div>
               </div>
 
-              {/* Filter */}
               <div className="flex items-center space-x-2">
                 <select 
                   value={filterDept} 
@@ -446,7 +433,6 @@ export default function SchoolCalendarApp() {
                 </select>
               </div>
 
-              {/* Print Button */}
               <button 
                 onClick={handlePrint}
                 className="flex items-center px-3 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors shadow-sm"
@@ -461,10 +447,9 @@ export default function SchoolCalendarApp() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none print:w-full">
+      {/* Main Content - 使用 mx-auto 確保居中，並設定 w-full */}
+      <main className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none print:w-full">
         
-        {/* Print Header (Visible ONLY when printing) */}
         <div className="hidden print:block text-center mb-6">
           <h1 className="text-2xl font-serif font-bold text-black">{String(config.semesterName)} 行事曆</h1>
           <p className="text-sm text-gray-600 mt-1">
@@ -472,22 +457,19 @@ export default function SchoolCalendarApp() {
           </p>
         </div>
 
-        {/* Weekly View */}
         <div className="space-y-8 print:space-y-4">
           {filteredWeeks.map((week, wIndex) => (
             <div 
               key={wIndex} 
               className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:rounded-none print:border-black print:break-inside-avoid"
             >
-              {/* Week Header */}
-              <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex justify-between items-center print:bg-gray-100 print:border-black print:py-1">
-                <span className="font-bold text-gray-700 print:text-black">第 {wIndex + 1} 週</span>
-                <span className="text-xs text-gray-500 print:text-black">
+              <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex justify-between items-center print:bg-gray-100 print:border-black print:py-1">
+                <span className="font-bold text-gray-800 print:text-black">第 {wIndex + 1} 週</span>
+                <span className="text-xs text-gray-600 print:text-black">
                   {formatDate(week[0].dateObj)} - {formatDate(week[week.length-1].dateObj)}
                 </span>
               </div>
 
-              {/* Days Grid (Responsive) */}
               <div className="grid grid-cols-1 md:grid-cols-7 divide-y md:divide-y-0 md:divide-x divide-gray-100 print:divide-x print:divide-black print:border-collapse">
                 {week.map((day) => {
                   const isWeekend = day.dayOfWeek === 0 || day.dayOfWeek === 6;
@@ -500,22 +482,20 @@ export default function SchoolCalendarApp() {
                       key={day.dateStr} 
                       className={`
                         min-h-[150px] group flex flex-col 
-                        ${isWeekend ? 'bg-gray-50/50 print:bg-gray-50' : 'bg-white'}
+                        ${isWeekend ? 'bg-gray-100/50 print:bg-gray-100' : 'bg-white'}
                         ${!day.inSemester ? 'opacity-50 print:opacity-30' : ''}
                         print:min-h-[100px]
                       `}
                     >
-                      {/* Day Header */}
-                      <div className="p-2 border-b border-gray-50 flex justify-between items-center print:border-gray-300 print:py-1">
+                      <div className="p-2 border-b border-gray-100 flex justify-between items-center print:border-gray-300 print:py-1">
                         <div className="flex items-center space-x-1">
-                          <span className={`text-sm font-bold ${isWeekend ? 'text-red-500 print:text-black' : 'text-gray-700 print:text-black'}`}>
+                          <span className={`text-sm font-bold ${isWeekend ? 'text-red-600 print:text-black' : 'text-gray-800 print:text-black'}`}>
                             {day.dateObj.getDate()}
                           </span>
-                          <span className="text-xs text-gray-400 print:text-gray-600">
+                          <span className="text-xs text-gray-500 print:text-gray-600">
                             ({WEEKS_ZH[day.dayOfWeek]})
                           </span>
                         </div>
-                        {/* Add Button - Hidden on Print */}
                         <button 
                           onClick={() => {
                             setEditingDate(day.dateStr);
@@ -528,7 +508,6 @@ export default function SchoolCalendarApp() {
                         </button>
                       </div>
 
-                      {/* Events List */}
                       <div className="p-2 space-y-1.5 flex-1 print:p-1 print:space-y-1">
                         {displayEvents.map((event) => {
                           const deptConfig = DEPARTMENTS.find(d => d.name === event.department) || DEPARTMENTS[0];
@@ -537,22 +516,20 @@ export default function SchoolCalendarApp() {
                               key={event.id} 
                               className={`
                                 text-xs p-1.5 rounded border ${deptConfig.color} relative group/event
-                                print:border print:text-[10pt] print:p-1 print:leading-tight
+                                print:border print:text-[10pt] print:p-1 print:leading-tight shadow-sm print:shadow-none
                               `}
                             >
                               <div className="font-bold mb-0.5 flex justify-between print:mb-0">
                                 <span className="print:font-semibold">{String(event.department)}</span>
-                                {/* Delete Button - Hidden on Print */}
                                 <button 
                                   onClick={() => handleDeleteEvent(event.id)}
-                                  className="print:hidden hidden group-hover/event:block text-red-600 hover:text-red-800"
+                                  className="print:hidden hidden group-hover/event:block text-red-700 hover:text-red-900"
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </button>
                               </div>
-                              {/* Section & Content combined for compact print */}
-                              <div className="whitespace-pre-wrap break-words">
-                                <span className="text-gray-500 mr-1 print:text-gray-700">[{String(event.section)}]</span>
+                              <div className="whitespace-pre-wrap break-words text-gray-900 print:text-black">
+                                <span className="text-gray-700 mr-1 print:text-black font-medium">[{String(event.section)}]</span>
                                 {String(event.content)}
                               </div>
                             </div>
@@ -562,7 +539,6 @@ export default function SchoolCalendarApp() {
                     </div>
                   );
                 })}
-                {/* Fill empty cells if week is partial - Should be minimal now */}
                 {Array.from({ length: 7 - week.length }).map((_, i) => (
                    <div key={`empty-${i}`} className="hidden md:block bg-gray-50/30 print:block print:bg-white"></div>
                 ))}
@@ -571,7 +547,6 @@ export default function SchoolCalendarApp() {
           ))}
         </div>
 
-        {/* Empty State - Hidden on print if empty to avoid wasting paper, or keep nicely */}
         {events.length === 0 && (
           <div className="text-center py-20 text-gray-400 print:hidden">
             <Calendar className="w-16 h-16 mx-auto mb-4 opacity-20" />
@@ -580,9 +555,6 @@ export default function SchoolCalendarApp() {
         )}
       </main>
 
-      {/* --- Modals --- */}
-
-      {/* Settings Modal */}
       <Modal 
         isOpen={showConfigModal} 
         onClose={() => setShowConfigModal(false)}
@@ -631,7 +603,6 @@ export default function SchoolCalendarApp() {
         </form>
       </Modal>
 
-      {/* Add Event Modal */}
       <Modal 
         isOpen={showEventModal} 
         onClose={() => setShowEventModal(false)}
