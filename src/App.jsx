@@ -28,8 +28,8 @@ import {
   Filter,
   Download,
   Printer,
-  List, // Added List icon
-  Grid  // Added Grid icon
+  List, 
+  Grid  
 } from 'lucide-react';
 
 // --- Firebase Configuration & Initialization ---
@@ -314,13 +314,10 @@ export default function SchoolCalendarApp() {
   };
 
   const handlePrint = () => {
-    // 強制在列印時使用列表模式 (通常較為正式)
     const originalMode = viewMode;
     setViewMode('list');
     setTimeout(() => {
       window.print();
-      // Optional: restore view mode after print dialog closes (though user might prefer staying in list)
-      // setViewMode(originalMode);
     }, 100);
   };
 
@@ -400,7 +397,7 @@ export default function SchoolCalendarApp() {
   // --- Render ---
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans print:bg-white">
+    <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans print:bg-white flex flex-col items-center">
       
       <style>{`
         @media print {
@@ -426,8 +423,8 @@ export default function SchoolCalendarApp() {
       `}</style>
 
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm print:hidden w-full no-print">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm print:hidden w-full no-print flex justify-center">
+        <div className="w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center py-4 space-y-4 md:space-y-0">
             
             <div className="flex items-center space-x-3">
@@ -485,14 +482,14 @@ export default function SchoolCalendarApp() {
                         setSelectedSection(dept.sections[0]);
                       }
                     }}
-                    className="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1"
+                    className="text-sm bg-white border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1"
                   >
                     {DEPARTMENTS.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
                   </select>
                   <select 
                     value={selectedSection}
                     onChange={(e) => setSelectedSection(e.target.value)}
-                    className="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1"
+                    className="text-sm bg-white border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1"
                   >
                     {selectedDept?.sections.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -504,7 +501,7 @@ export default function SchoolCalendarApp() {
                 <select 
                   value={filterDept} 
                   onChange={(e) => setFilterDept(e.target.value)}
-                  className="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1"
+                  className="text-sm bg-white border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1"
                 >
                   <option value="ALL">顯示所有處室</option>
                   {DEPARTMENTS.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
@@ -526,7 +523,7 @@ export default function SchoolCalendarApp() {
       </header>
 
       {/* Main Content */}
-      <main className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none print:w-full">
+      <main className="w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none print:w-full">
         
         <div className="hidden print:block text-center mb-6">
           <h1 className="text-2xl font-serif font-bold text-black">{String(config.semesterName)} 行事曆</h1>
@@ -699,7 +696,7 @@ export default function SchoolCalendarApp() {
               type="text"
               value={config.semesterName}
               onChange={(e) => setConfig({...config, semesterName: e.target.value})}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -709,7 +706,7 @@ export default function SchoolCalendarApp() {
                 type="date"
                 value={config.startDate}
                 onChange={(e) => setConfig({...config, startDate: e.target.value})}
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               />
             </div>
             <div>
@@ -718,7 +715,7 @@ export default function SchoolCalendarApp() {
                 type="date"
                 value={config.endDate}
                 onChange={(e) => setConfig({...config, endDate: e.target.value})}
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               />
             </div>
           </div>
@@ -761,7 +758,7 @@ export default function SchoolCalendarApp() {
               value={newEventContent}
               onChange={(e) => setNewEventContent(e.target.value)}
               placeholder="請輸入活動內容..."
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             />
           </div>
 
