@@ -32,7 +32,7 @@ import {
   Grid,
   AlertTriangle,
   FileSpreadsheet,
-  Upload // Added icon for import
+  Upload 
 } from 'lucide-react';
 
 // --- Firebase Configuration & Initialization ---
@@ -101,6 +101,7 @@ const DEPARTMENTS = [
 ];
 
 const WEEKS_ZH = ['日', '一', '二', '三', '四', '五', '六'];
+const PERIOD_LABELS = ['寒假', '暑假', '開學前', '開學後'];
 
 // --- Helper Functions ---
 const formatDate = (date) => {
@@ -138,10 +139,10 @@ const getDatesInRange = (startDate, endDate) => {
   return dates;
 };
 
-// Calculate week number relative to the "First Week Date"
-const getWeekInfo = (dateStr, firstWeekDateStr) => {
+// Calculate week number relative to the Semester Start Date
+const getWeekInfo = (dateStr, semesterStartDateStr) => {
   const d = new Date(dateStr);
-  const start = new Date(firstWeekDateStr || dateStr);
+  const start = new Date(semesterStartDateStr || dateStr);
   
   const startDay = start.getDay();
   const adjustedStart = new Date(start);
@@ -155,8 +156,8 @@ const getWeekInfo = (dateStr, firstWeekDateStr) => {
 };
 
 // Calculate week date range string
-const getWeekRangeString = (weekNum, firstWeekDateStr) => {
-  const start = new Date(firstWeekDateStr);
+const getWeekRangeString = (weekNum, semesterStartDateStr) => {
+  const start = new Date(semesterStartDateStr);
   const startDay = start.getDay();
   const adjustedStart = new Date(start);
   adjustedStart.setDate(start.getDate() - startDay); // Anchor Sunday
@@ -201,9 +202,8 @@ const parseCSVLine = (text) => {
   return result;
 };
 
-// Smart Date Parser for Import (reconstructs YYYY based on semester range)
+// Smart Date Parser for Import
 const parseImportDate = (datePart, startDateStr, endDateStr) => {
-  // datePart expected: "MM/DD..." e.g. "01/21", "08/30(五)"
   const match = datePart.match(/(\d{1,2})[\/-](\d{1,2})/);
   if (!match) return null;
   
@@ -215,23 +215,17 @@ const parseImportDate = (datePart, startDateStr, endDateStr) => {
   const startYear = start.getFullYear();
   const endYear = end.getFullYear();
 
-  // 1. Try constructing date with Start Year
   let candidate = new Date(startYear, month - 1, day);
   let candidateStr = `${candidate.getFullYear()}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
   
   if (candidateStr >= startDateStr && candidateStr <= endDateStr) return candidateStr;
   
-  // 2. Try constructing date with End Year (if different)
   if (endYear !== startYear) {
      candidate = new Date(endYear, month - 1, day);
      candidateStr = `${candidate.getFullYear()}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
      if (candidateStr >= startDateStr && candidateStr <= endDateStr) return candidateStr;
   }
   
-  // 3. Fallback: Return it with Start Year anyway if out of range
-  // (User might adjust later, or it's a pre-semester week in previous year?)
-  // Actually, if it's "08/01" but start is "08/21", it might be same year.
-  // Default to Start Year logic for safety.
   return `${startYear}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
 };
 
@@ -261,11 +255,12 @@ export default function SchoolCalendarApp() {
   const [user, setUser] = useState(null);
   const [events, setEvents] = useState([]);
   const [config, setConfig] = useState({
-    startDate: formatDate(new Date()),
-    endDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 6))),
-    firstWeekDate: formatDate(new Date()),
-    semesterEndDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 4))), 
-    vacationName: '寒假', 
+    startDate: formatDate(new Date()), // Table start
+    endDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 6))), // Table end
+    semesterStartDate: formatDate(new Date()), // Actual semester start (Week 1)
+    semesterEndDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 4))), // Semester end
+    preSemesterLabel: '開學前', // Label for weeks before semester start
+    postSemesterLabel: '寒假', // Label for weeks after semester end
     semesterName: '113學年度第二學期'
   });
   
@@ -284,17 +279,27 @@ export default function SchoolCalendarApp() {
 
   // --- Helper to determine label ---
   const getWeekLabel = (weekNum) => {
+    // 1. Before Semester Start
     if (weekNum < 1) {
+      // weekNum 0 -> Pre 1, weekNum -1 -> Pre 2
+      // If semesterStartDate is set correctly, this logic holds.
+      // Note: getWeekInfo calculates relative to semesterStartDate.
+      // If date < semesterStartDate's week, weekNum will be <= 0.
       const preWeekNum = Math.abs(weekNum) + 1;
-      return `開學前第${preWeekNum}週`; 
+      return `${config.preSemesterLabel || '開學前'}\n第${preWeekNum}週`;
     }
+
+    // 2. Check if this week is after the semester end date
     if (config.semesterEndDate) {
-      const endWeekNum = getWeekInfo(config.semesterEndDate, config.firstWeekDate);
+      const endWeekNum = getWeekInfo(config.semesterEndDate, config.semesterStartDate);
+      
       if (weekNum > endWeekNum) {
         const vacationWeekNum = weekNum - endWeekNum;
-        return `${config.vacationName || '寒假'}第${vacationWeekNum}週`;
+        return `${config.postSemesterLabel || '寒假'}\n第${vacationWeekNum}週`;
       }
     }
+
+    // 3. Normal semester week
     return `第${weekNum}週`;
   };
 
@@ -359,9 +364,11 @@ export default function SchoolCalendarApp() {
             setConfig({
               startDate: String(data.startDate || config.startDate),
               endDate: String(data.endDate || config.endDate),
-              firstWeekDate: String(data.firstWeekDate || data.startDate || config.startDate),
+              // Map old 'firstWeekDate' to new 'semesterStartDate' if needed
+              semesterStartDate: String(data.semesterStartDate || data.firstWeekDate || data.startDate || config.startDate),
               semesterEndDate: String(data.semesterEndDate || config.endDate),
-              vacationName: String(data.vacationName || '寒假'), 
+              preSemesterLabel: String(data.preSemesterLabel || '開學前'),
+              postSemesterLabel: String(data.postSemesterLabel || '寒假'),
               semesterName: String(data.semesterName || config.semesterName)
             });
           }
@@ -383,12 +390,7 @@ export default function SchoolCalendarApp() {
     e.preventDefault();
     if (!user || !db) return;
     try {
-      const newConfig = {
-        ...config,
-        firstWeekDate: config.firstWeekDate || config.startDate,
-        semesterEndDate: config.semesterEndDate || config.endDate
-      };
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_config', 'main_config'), newConfig);
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_config', 'main_config'), config);
       setShowConfigModal(false);
     } catch (err) {
       console.error("Save config failed", err);
@@ -470,7 +472,7 @@ export default function SchoolCalendarApp() {
     exportEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     exportEvents.forEach(event => {
-      const weekNum = getWeekInfo(event.date, config.firstWeekDate || config.startDate);
+      const weekNum = getWeekInfo(event.date, config.semesterStartDate || config.startDate);
       const weekLabel = getWeekLabel(weekNum).replace('\n', ' '); 
       const dateStr = formatDateZH(event.date);
       
@@ -515,46 +517,37 @@ export default function SchoolCalendarApp() {
     reader.onload = async (event) => {
       try {
         const text = event.target.result;
-        // Basic split by newline, careful with quotes if user edited in excel but usually newline is safe row delimiter
         const rows = text.split(/\r?\n/);
         
         let successCount = 0;
         let batchPromises = [];
 
-        // Assume Row 0 is header, start from 1
         for (let i = 1; i < rows.length; i++) {
           const rowText = rows[i].trim();
           if (!rowText) continue;
 
-          // Parse CSV Line
           const cols = parseCSVLine(rowText);
-          
-          // Index mapping based on Export: 
-          // 0:週次, 1:日期, 2:舉辦事項, 3:主辦單位, 4:協助單位, ...
-          if (cols.length < 3) continue; // Basic validation
+          if (cols.length < 3) continue; 
 
           const dateStrRaw = cols[1];
           const content = cols[2];
-          const dept = cols[3] || '其他'; // Fallback
+          const dept = cols[3] || '其他'; 
           const section = cols[4] || '';
 
           if (!dateStrRaw || !content) continue;
 
-          // Parse Date (Needs smart year logic)
           const dbDate = parseImportDate(dateStrRaw, config.startDate, config.endDate);
           
           if (dbDate) {
-            // Create event object
             const newEvent = {
               date: dbDate,
-              content: content.replace(/^"|"$/g, '').replace(/""/g, '"'), // Unescape quotes if manual parser didn't
+              content: content.replace(/^"|"$/g, '').replace(/""/g, '"'), 
               department: dept,
               section: section,
               timestamp: Date.now(),
               authorId: user?.uid || 'imported'
             };
 
-            // Add to firestore
             const docId = `${Date.now()}_import_${i}`;
             batchPromises.push(
               setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_events', docId), newEvent)
@@ -568,7 +561,7 @@ export default function SchoolCalendarApp() {
         
       } catch (err) {
         console.error("Import failed:", err);
-        alert("匯入失敗，請檢查檔案格式是否正確 (建議使用本系統匯出的 CSV 格式)。");
+        alert("匯入失敗，請檢查檔案格式是否正確。");
       } finally {
         e.target.value = ''; // Reset for next use
       }
@@ -578,7 +571,6 @@ export default function SchoolCalendarApp() {
 
   // --- Data Processing for Views ---
 
-  // 1. Grid View Data: Group by Weeks
   const calendarDays = useMemo(() => {
     if (!config.startDate || !config.endDate) return [];
     
@@ -602,7 +594,7 @@ export default function SchoolCalendarApp() {
         const dateStr = formatDate(date);
         const dayEvents = events.filter(e => e.date === dateStr);
         const inSemester = dateStr >= config.startDate && dateStr <= config.endDate;
-        const weekNum = getWeekInfo(dateStr, config.firstWeekDate || config.startDate);
+        const weekNum = getWeekInfo(dateStr, config.semesterStartDate || config.startDate);
 
         return {
           dateObj: date,
@@ -617,7 +609,7 @@ export default function SchoolCalendarApp() {
       console.error("Error generating calendar days:", e);
       return [];
     }
-  }, [config.startDate, config.endDate, config.firstWeekDate, events]);
+  }, [config.startDate, config.endDate, config.semesterStartDate, events]);
 
   const weeksData = useMemo(() => {
     const weeks = [];
@@ -649,7 +641,7 @@ export default function SchoolCalendarApp() {
 
     if (!baseEvents.length) return [];
 
-    const anchorDate = config.firstWeekDate || config.startDate;
+    const anchorDate = config.semesterStartDate || config.startDate;
     const enriched = baseEvents.map(e => ({
       ...e,
       weekNum: getWeekInfo(e.date, anchorDate)
@@ -659,7 +651,6 @@ export default function SchoolCalendarApp() {
     for (let i = 0; i < enriched.length; i++) {
       const current = { ...enriched[i] }; 
       
-      // -- Calculate Week RowSpan --
       const prev = i > 0 ? enriched[i - 1] : null;
       
       if (!prev || prev.weekNum !== current.weekNum) {
@@ -676,7 +667,6 @@ export default function SchoolCalendarApp() {
         current.weekRowSpan = 0; 
       }
 
-      // -- Calculate Date RowSpan --
       if (!prev || prev.date !== current.date) {
         let span = 1;
         for (let k = i + 1; k < enriched.length; k++) {
@@ -695,7 +685,7 @@ export default function SchoolCalendarApp() {
     }
 
     return result;
-  }, [events, filterDept, config.startDate, config.firstWeekDate]);
+  }, [events, filterDept, config.startDate, config.semesterStartDate]);
 
 
   // --- Render ---
@@ -976,7 +966,7 @@ export default function SchoolCalendarApp() {
                              {getWeekLabel(event.weekNum)}
                            </span>
                            <span className="text-[10px] text-gray-500 mt-1">
-                             {getWeekRangeString(event.weekNum, config.firstWeekDate || config.startDate)}
+                             {getWeekRangeString(event.weekNum, config.semesterStartDate || config.startDate)}
                            </span>
                          </div>
                        </td>
@@ -1075,54 +1065,66 @@ export default function SchoolCalendarApp() {
                 </div>
               </div>
 
-              {/* Row 2: Key Academic Dates */}
-              <div className="space-y-3">
-                <div>
+              {/* Row 2: Semester Start Config */}
+              <div className="flex space-x-2 mb-3">
+                <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    第一週(開學)開始日
-                    <span className="ml-2 text-xs text-blue-600 font-normal">此前為預備週</span>
+                    學期開始日 (第1週)
                   </label>
                   <input 
                     type="date"
-                    value={config.firstWeekDate || config.startDate}
-                    onChange={(e) => setConfig({...config, firstWeekDate: e.target.value})}
+                    value={config.semesterStartDate || config.startDate}
+                    onChange={(e) => setConfig({...config, semesterStartDate: e.target.value})}
                     className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border-l-4 border-l-blue-500"
                   />
                 </div>
-                
-                <div className="flex space-x-2">
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      學期結束日
-                      <span className="ml-2 text-xs text-orange-600 font-normal">此後為假期</span>
-                    </label>
-                    <input 
-                      type="date"
-                      value={config.semesterEndDate || config.endDate}
-                      onChange={(e) => setConfig({...config, semesterEndDate: e.target.value})}
-                      className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border-l-4 border-l-orange-500"
-                    />
-                  </div>
-                  <div className="w-1/3">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">假期名稱</label>
-                    <select
-                      value={config.vacationName}
-                      onChange={(e) => setConfig({...config, vacationName: e.target.value})}
-                      className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    >
-                      <option value="寒假">寒假</option>
-                      <option value="暑假">暑假</option>
-                    </select>
-                  </div>
+                <div className="w-1/2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">開始日之前稱為</label>
+                  <select
+                    value={config.preSemesterLabel}
+                    onChange={(e) => setConfig({...config, preSemesterLabel: e.target.value})}
+                    className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  >
+                    {PERIOD_LABELS.map(label => (
+                      <option key={`pre-${label}`} value={label}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 3: Semester End Config */}
+              <div className="flex space-x-2">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    學期結束日
+                  </label>
+                  <input 
+                    type="date"
+                    value={config.semesterEndDate || config.endDate}
+                    onChange={(e) => setConfig({...config, semesterEndDate: e.target.value})}
+                    className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border-l-4 border-l-orange-500"
+                  />
+                </div>
+                <div className="w-1/2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">結束日之後稱為</label>
+                  <select
+                    value={config.postSemesterLabel}
+                    onChange={(e) => setConfig({...config, postSemesterLabel: e.target.value})}
+                    className="w-full bg-white rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  >
+                    {PERIOD_LABELS.map(label => (
+                      <option key={`post-${label}`} value={label}>{label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-800">
               <ul className="list-disc list-inside space-y-1">
-                <li>第一週開始日之前 = <strong>開學前第X週</strong></li>
-                <li>第一週開始日 ~ 學期結束日 = <strong>第X週</strong></li>
-                <li>學期結束日之後 = <strong>{config.vacationName || '寒假'}第X週</strong></li>
+                <li>學期開始日之前 = <strong>{config.preSemesterLabel}第X週</strong></li>
+                <li>學期期間 = <strong>第X週</strong></li>
+                <li>學期結束日之後 = <strong>{config.postSemesterLabel}第X週</strong></li>
               </ul>
             </div>
 
