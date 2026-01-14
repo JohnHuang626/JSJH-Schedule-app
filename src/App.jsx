@@ -63,55 +63,54 @@ try {
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // --- Constants & Data ---
+// 更新顏色設定：
+// 教務處:紅, 學務處:粉, 總務處:藍, 輔導室:綠, 人事室:咖啡
 const DEPARTMENTS = [
   { 
     name: '教務處', 
-    // Grid View Color (Background + Text)
-    color: 'bg-blue-200 text-blue-900 border-blue-300 print:bg-transparent',
-    // List View/Print Text Color Only
-    textClass: 'text-blue-800 print:text-blue-900',
+    color: 'bg-red-100 border-red-200', 
+    textClass: 'text-red-700 font-bold', 
     sections: ['教學組', '註冊組', '設備組', '資訊組'] 
   },
   { 
     name: '學務處', 
-    color: 'bg-green-200 text-green-900 border-green-300 print:bg-transparent',
-    textClass: 'text-green-800 print:text-green-900',
+    color: 'bg-pink-100 border-pink-200',
+    textClass: 'text-pink-600 font-bold',
     sections: ['訓育組', '生教組', '衛生組', '體育組'] 
   },
   { 
     name: '總務處', 
-    color: 'bg-orange-200 text-orange-900 border-orange-300 print:bg-transparent',
-    textClass: 'text-orange-800 print:text-orange-900',
+    color: 'bg-blue-100 border-blue-200',
+    textClass: 'text-blue-700 font-bold',
     sections: ['文書組', '事務組', '出納組'] 
   },
   { 
     name: '輔導室', 
-    color: 'bg-purple-200 text-purple-900 border-purple-300 print:bg-transparent',
-    textClass: 'text-purple-800 print:text-purple-900',
+    color: 'bg-green-100 border-green-200',
+    textClass: 'text-green-700 font-bold',
     sections: ['輔導組', '資料組', '特教組'] 
   },
   { 
     name: '人事室', 
-    color: 'bg-gray-200 text-gray-900 border-gray-300 print:bg-transparent',
-    textClass: 'text-gray-800 print:text-gray-900',
+    color: 'bg-amber-100 border-amber-200', // Amber-100/200 近似淺咖啡色背景
+    textClass: 'text-amber-800 font-bold', // Amber-800 近似深咖啡色文字
     sections: ['人事室'] 
   },
   { 
     name: '主計室', 
-    color: 'bg-gray-200 text-gray-900 border-gray-300 print:bg-transparent',
-    textClass: 'text-gray-800 print:text-gray-900',
+    color: 'bg-purple-100 border-purple-200',
+    textClass: 'text-purple-700 font-bold',
     sections: ['主計室'] 
   },
   { 
     name: '校長室', 
-    color: 'bg-red-200 text-red-900 border-red-300 print:bg-transparent',
-    textClass: 'text-red-800 print:text-red-900',
+    color: 'bg-indigo-100 border-indigo-200',
+    textClass: 'text-indigo-700 font-bold',
     sections: ['校長'] 
   }
 ];
 
 const WEEKS_ZH = ['日', '一', '二', '三', '四', '五', '六'];
-// Update labels as requested
 const PRE_PERIOD_LABELS = ['學期前', '寒假前', '暑假前'];
 const POST_PERIOD_LABELS = ['學期後', '寒假後', '暑假後'];
 
@@ -785,7 +784,7 @@ export default function SchoolCalendarApp() {
               <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4 bg-gray-50 p-2 rounded-lg border border-gray-100">
                 <div className="flex items-center space-x-2">
                   <Users className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm font-medium text-gray-600">目前身分：</span>
+                  <span className="text-sm font-medium text-gray-600 whitespace-nowrap">目前身分：</span>
                 </div>
                 <div className="flex space-x-2">
                   <select 
@@ -935,7 +934,7 @@ export default function SchoolCalendarApp() {
                                 `}
                               >
                                 <div className="font-bold mb-0.5 flex justify-between">
-                                  <span>{String(event.department)}</span>
+                                  <span className={deptConfig.textClass}>{String(event.department)}</span>
                                   <button 
                                     onClick={() => handleDeleteEvent(event.id)}
                                     className="hidden group-hover/event:block text-red-700 hover:text-red-900"
@@ -944,7 +943,7 @@ export default function SchoolCalendarApp() {
                                   </button>
                                 </div>
                                 <div className="whitespace-pre-wrap break-words text-gray-900">
-                                  <span className="text-gray-700 mr-1 font-medium">[{String(event.section)}]</span>
+                                  <span className={`mr-1 font-medium ${deptConfig.textClass}`}>[{String(event.section)}]</span>
                                   {String(event.content)}
                                 </div>
                               </div>
