@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
@@ -31,7 +31,8 @@ import {
   List, 
   Grid,
   AlertTriangle,
-  FileSpreadsheet // Added icon for export
+  FileSpreadsheet,
+  Upload // Added icon for import
 } from 'lucide-react';
 
 // --- Firebase Configuration & Initialization ---
@@ -175,6 +176,65 @@ const getWeekRangeString = (weekNum, firstWeekDateStr) => {
   return `${formatSimple(weekStart)}~${formatSimple(weekEnd)}`;
 };
 
+// Simple CSV Line Parser (handles quotes)
+const parseCSVLine = (text) => {
+  const result = [];
+  let cell = '';
+  let inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      if (inQuote && text[i + 1] === '"') {
+        cell += '"';
+        i++; // skip escaped quote
+      } else {
+        inQuote = !inQuote;
+      }
+    } else if (c === ',' && !inQuote) {
+      result.push(cell);
+      cell = '';
+    } else {
+      cell += c;
+    }
+  }
+  result.push(cell);
+  return result;
+};
+
+// Smart Date Parser for Import (reconstructs YYYY based on semester range)
+const parseImportDate = (datePart, startDateStr, endDateStr) => {
+  // datePart expected: "MM/DD..." e.g. "01/21", "08/30(五)"
+  const match = datePart.match(/(\d{1,2})[\/-](\d{1,2})/);
+  if (!match) return null;
+  
+  const month = parseInt(match[1], 10);
+  const day = parseInt(match[2], 10);
+  
+  const start = new Date(startDateStr);
+  const end = new Date(endDateStr);
+  const startYear = start.getFullYear();
+  const endYear = end.getFullYear();
+
+  // 1. Try constructing date with Start Year
+  let candidate = new Date(startYear, month - 1, day);
+  let candidateStr = `${candidate.getFullYear()}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  
+  if (candidateStr >= startDateStr && candidateStr <= endDateStr) return candidateStr;
+  
+  // 2. Try constructing date with End Year (if different)
+  if (endYear !== startYear) {
+     candidate = new Date(endYear, month - 1, day);
+     candidateStr = `${candidate.getFullYear()}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+     if (candidateStr >= startDateStr && candidateStr <= endDateStr) return candidateStr;
+  }
+  
+  // 3. Fallback: Return it with Start Year anyway if out of range
+  // (User might adjust later, or it's a pre-semester week in previous year?)
+  // Actually, if it's "08/01" but start is "08/21", it might be same year.
+  // Default to Start Year logic for safety.
+  return `${startYear}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+};
+
 // --- Components ---
 
 // Modal Component
@@ -204,11 +264,14 @@ export default function SchoolCalendarApp() {
     startDate: formatDate(new Date()),
     endDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 6))),
     firstWeekDate: formatDate(new Date()),
-    semesterEndDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 4))), // Default ~4 months sem
-    vacationName: '寒假', // '寒假' or '暑假'
+    semesterEndDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 4))), 
+    vacationName: '寒假', 
     semesterName: '113學年度第二學期'
   });
   
+  // Refs
+  const fileInputRef = useRef(null);
+
   // Local UI State
   const [selectedDept, setSelectedDept] = useState(DEPARTMENTS[0]);
   const [selectedSection, setSelectedSection] = useState(DEPARTMENTS[0].sections[0]);
@@ -221,23 +284,17 @@ export default function SchoolCalendarApp() {
 
   // --- Helper to determine label ---
   const getWeekLabel = (weekNum) => {
-    // 1. Pre-semester weeks
     if (weekNum < 1) {
       const preWeekNum = Math.abs(weekNum) + 1;
-      return `開學前第${preWeekNum}週`; // Keep simple for CSV
+      return `開學前第${preWeekNum}週`; 
     }
-
-    // 2. Check if this week is after the semester end date
     if (config.semesterEndDate) {
       const endWeekNum = getWeekInfo(config.semesterEndDate, config.firstWeekDate);
-      
       if (weekNum > endWeekNum) {
         const vacationWeekNum = weekNum - endWeekNum;
         return `${config.vacationName || '寒假'}第${vacationWeekNum}週`;
       }
     }
-
-    // 3. Normal semester week
     return `第${weekNum}週`;
   };
 
@@ -303,8 +360,8 @@ export default function SchoolCalendarApp() {
               startDate: String(data.startDate || config.startDate),
               endDate: String(data.endDate || config.endDate),
               firstWeekDate: String(data.firstWeekDate || data.startDate || config.startDate),
-              semesterEndDate: String(data.semesterEndDate || config.endDate), // Load or default
-              vacationName: String(data.vacationName || '寒假'), // Load or default
+              semesterEndDate: String(data.semesterEndDate || config.endDate),
+              vacationName: String(data.vacationName || '寒假'), 
               semesterName: String(data.semesterName || config.semesterName)
             });
           }
@@ -403,20 +460,8 @@ export default function SchoolCalendarApp() {
   };
 
   const handleExportCSV = () => {
-    // 1. Define Headers
     const headers = ["週次", "日期", "舉辦事項", "主辦單位", "協助單位", "執行情形", "備註"];
-    
-    // 2. Prepare Data Rows
     const csvRows = [headers.join(',')];
-    
-    // Using processedList logic here to ensure consistency
-    // We recreate the sorted list logic briefly as processedList is not in this scope
-    // Actually, processedList IS available in scope if we define handleExportCSV inside component
-    
-    // However, to ensure we get *all* data or *filtered* data depending on user view,
-    // we should use the same logic. Let's assume WYSIWYG (What You See Is What You Get)
-    // or just export everything? Usually filtering is for view, export might want everything.
-    // But let's follow the current filterDept state to be consistent.
     
     let exportEvents = [...events];
     if (filterDept !== "ALL") {
@@ -426,24 +471,20 @@ export default function SchoolCalendarApp() {
 
     exportEvents.forEach(event => {
       const weekNum = getWeekInfo(event.date, config.firstWeekDate || config.startDate);
-      const weekLabel = getWeekLabel(weekNum).replace('\n', ' '); // Remove newline for CSV
+      const weekLabel = getWeekLabel(weekNum).replace('\n', ' '); 
       const dateStr = formatDateZH(event.date);
       
-      // Escape content for CSV (handle quotes and commas)
       const content = `"${event.content.replace(/"/g, '""')}"`;
       const dept = event.department;
       const sect = event.section;
       
-      // Construct row
       const row = [weekLabel, dateStr, content, dept, sect, "", ""];
       csvRows.push(row.join(','));
     });
 
-    // 3. Create Blob with BOM for Excel UTF-8 compatibility
     const csvString = '\uFEFF' + csvRows.join('\n');
     const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
     
-    // 4. Trigger Download
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -452,6 +493,87 @@ export default function SchoolCalendarApp() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  // --- Import Logic ---
+  const handleImportClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleProcessImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!confirm("匯入功能將會「新增」資料到目前的行事曆中。\n\n如果您想要完全替換，請先到「設定」中執行「刪除所有行程」，再進行匯入。\n\n確定要繼續匯入嗎？")) {
+      e.target.value = ''; // Reset input
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target.result;
+        // Basic split by newline, careful with quotes if user edited in excel but usually newline is safe row delimiter
+        const rows = text.split(/\r?\n/);
+        
+        let successCount = 0;
+        let batchPromises = [];
+
+        // Assume Row 0 is header, start from 1
+        for (let i = 1; i < rows.length; i++) {
+          const rowText = rows[i].trim();
+          if (!rowText) continue;
+
+          // Parse CSV Line
+          const cols = parseCSVLine(rowText);
+          
+          // Index mapping based on Export: 
+          // 0:週次, 1:日期, 2:舉辦事項, 3:主辦單位, 4:協助單位, ...
+          if (cols.length < 3) continue; // Basic validation
+
+          const dateStrRaw = cols[1];
+          const content = cols[2];
+          const dept = cols[3] || '其他'; // Fallback
+          const section = cols[4] || '';
+
+          if (!dateStrRaw || !content) continue;
+
+          // Parse Date (Needs smart year logic)
+          const dbDate = parseImportDate(dateStrRaw, config.startDate, config.endDate);
+          
+          if (dbDate) {
+            // Create event object
+            const newEvent = {
+              date: dbDate,
+              content: content.replace(/^"|"$/g, '').replace(/""/g, '"'), // Unescape quotes if manual parser didn't
+              department: dept,
+              section: section,
+              timestamp: Date.now(),
+              authorId: user?.uid || 'imported'
+            };
+
+            // Add to firestore
+            const docId = `${Date.now()}_import_${i}`;
+            batchPromises.push(
+              setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_events', docId), newEvent)
+            );
+            successCount++;
+          }
+        }
+
+        await Promise.all(batchPromises);
+        alert(`匯入完成！成功新增了 ${successCount} 筆行程。`);
+        
+      } catch (err) {
+        console.error("Import failed:", err);
+        alert("匯入失敗，請檢查檔案格式是否正確 (建議使用本系統匯出的 CSV 格式)。");
+      } finally {
+        e.target.value = ''; // Reset for next use
+      }
+    };
+    reader.readAsText(file);
   };
 
   // --- Data Processing for Views ---
@@ -685,12 +807,28 @@ export default function SchoolCalendarApp() {
 
               <div className="flex space-x-2">
                 <button 
+                  onClick={handleImportClick}
+                  className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
+                  title="匯入 CSV"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  <span className="text-sm">匯入</span>
+                </button>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleProcessImport} 
+                  accept=".csv" 
+                  hidden 
+                />
+
+                <button 
                   onClick={handleExportCSV}
                   className="flex items-center px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-sm"
                   title="匯出成 CSV (可由Excel開啟)"
                 >
                   <FileSpreadsheet className="w-4 h-4 mr-2" />
-                  <span className="text-sm">匯出 CSV</span>
+                  <span className="text-sm">匯出</span>
                 </button>
                 <button 
                   onClick={handlePrint}
