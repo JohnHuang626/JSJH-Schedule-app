@@ -101,7 +101,6 @@ const DEPARTMENTS = [
 ];
 
 const WEEKS_ZH = ['日', '一', '二', '三', '四', '五', '六'];
-// Update labels as requested
 const PRE_PERIOD_LABELS = ['學期前', '寒假前', '暑假前'];
 const POST_PERIOD_LABELS = ['學期後', '寒假後', '暑假後'];
 
@@ -256,7 +255,6 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 export default function SchoolCalendarApp() {
   const [user, setUser] = useState(null);
   const [events, setEvents] = useState([]);
-  // UPDATED: Completely refreshed initial state with new keys
   const [config, setConfig] = useState({
     startDate: formatDate(new Date()), 
     endDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 6))), 
@@ -282,24 +280,17 @@ export default function SchoolCalendarApp() {
 
   // --- Helper to determine label ---
   const getWeekLabel = (weekNum) => {
-    // 1. Before Semester Start (Countdown Logic)
     if (weekNum < 1) {
-      // weekNum 0 -> Pre 1 (closest to start), weekNum -1 -> Pre 2 (further back)
       const preWeekNum = Math.abs(weekNum) + 1;
       return `${config.preSemesterLabel || '學期前'}\n第${preWeekNum}週`;
     }
-
-    // 2. Check if this week is after the semester end date
     if (config.semesterEndDate) {
       const endWeekNum = getWeekInfo(config.semesterEndDate, config.semesterStartDate);
-      
       if (weekNum > endWeekNum) {
         const vacationWeekNum = weekNum - endWeekNum;
         return `${config.postSemesterLabel || '寒假後'}\n第${vacationWeekNum}週`;
       }
     }
-
-    // 3. Normal semester week
     return `第${weekNum}週`;
   };
 
@@ -362,14 +353,12 @@ export default function SchoolCalendarApp() {
           if (serverConfig) {
             const data = serverConfig.data();
             
-            // Fix migration from old default '開學前' to new '學期前'
             let preLabel = String(data.preSemesterLabel || '學期前');
             if (preLabel === '開學前') preLabel = '學期前';
 
             setConfig({
               startDate: String(data.startDate || config.startDate),
               endDate: String(data.endDate || config.endDate),
-              // Map old 'firstWeekDate' to new 'semesterStartDate' if needed
               semesterStartDate: String(data.semesterStartDate || data.firstWeekDate || data.startDate || config.startDate),
               semesterEndDate: String(data.semesterEndDate || config.endDate),
               preSemesterLabel: preLabel,
@@ -395,7 +384,6 @@ export default function SchoolCalendarApp() {
     e.preventDefault();
     if (!user || !db) return;
     try {
-      // UPDATED: Explicitly construct object with NEW keys only to clean up DB
       const cleanConfig = {
         startDate: config.startDate,
         endDate: config.endDate,
@@ -706,7 +694,8 @@ export default function SchoolCalendarApp() {
   // --- Render ---
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans print:bg-white flex flex-col items-center">
+    // 使用 w-[95%] 來實現流體寬度，同時保留左右邊距，mx-auto 負責置中
+    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans print:bg-white flex flex-col items-center">
       
       <style>{`
         @media print {
@@ -730,7 +719,8 @@ export default function SchoolCalendarApp() {
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm print:hidden w-full no-print flex justify-center">
-        <div className="w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
+        {/* Update max-width container to use 95% width and larger max-w constraint */}
+        <div className="w-[95%] max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center py-4 space-y-4 md:space-y-0">
             
             <div className="flex items-center space-x-3">
@@ -851,7 +841,7 @@ export default function SchoolCalendarApp() {
       </header>
 
       {/* Main Content */}
-      <main className="w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none print:w-full">
+      <main className="w-[95%] max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none print:w-full">
         
         <div className="hidden print:block text-center mb-6">
           <h1 className="text-2xl font-serif font-bold text-black">{String(config.semesterName)} 行事曆</h1>
@@ -860,6 +850,7 @@ export default function SchoolCalendarApp() {
           </p>
         </div>
 
+        {/* ... existing code ... */}
         {/* --- GRID VIEW (CALENDAR) --- */}
         <div className={`${viewMode === 'grid' ? 'block' : 'hidden'} print:hidden space-y-8`}>
           {filteredWeeks.map((week, wIndex) => {
@@ -1045,6 +1036,7 @@ export default function SchoolCalendarApp() {
       >
         <div className="space-y-6">
           <form onSubmit={handleSaveConfig} className="space-y-4">
+            {/* ... form content ... */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">學期名稱</label>
               <input 
