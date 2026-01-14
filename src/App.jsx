@@ -532,11 +532,12 @@ export default function SchoolCalendarApp() {
     }
   };
 
+  // UPDATED: handleProcessImport includes logic to skip duplicates
   const handleProcessImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!confirm("匯入功能將會「新增」資料到目前的行事曆中。\n\n如果您想要完全替換，請先到「設定」中執行「刪除所有行程」，再進行匯入。\n\n確定要繼續匯入嗎？")) {
+    if (!confirm("匯入功能將會「新增」資料到目前的行事曆中。\n系統將會自動過濾重複的行程（日期、內容、處室皆相同者）。\n\n確定要繼續匯入嗎？")) {
       e.target.value = ''; 
       return;
     }
@@ -548,6 +549,7 @@ export default function SchoolCalendarApp() {
         const rows = text.split(/\r?\n/);
         
         let successCount = 0;
+        let skipCount = 0;
         let batchPromises = [];
 
         for (let i = 1; i < rows.length; i++) {
@@ -558,18 +560,34 @@ export default function SchoolCalendarApp() {
           if (cols.length < 3) continue; 
 
           const dateStrRaw = cols[1];
-          const content = cols[2];
+          let content = cols[2];
           const dept = cols[3] || '其他'; 
           const section = cols[4] || '';
 
           if (!dateStrRaw || !content) continue;
 
+          // Clean content from extra CSV artifacts
+          content = content.replace(/^"|"$/g, '').replace(/""/g, '"').trim();
+
           const dbDate = parseImportDate(dateStrRaw, config.startDate, config.endDate);
           
           if (dbDate) {
+            // Check for duplicate in existing events
+            const isDuplicate = events.some(existing => 
+              existing.date === dbDate && 
+              existing.content === content && 
+              existing.department === dept &&
+              existing.section === section
+            );
+
+            if (isDuplicate) {
+              skipCount++;
+              continue; // Skip this iteration
+            }
+
             const newEvent = {
               date: dbDate,
-              content: content.replace(/^"|"$/g, '').replace(/""/g, '"'), 
+              content: content, 
               department: dept,
               section: section,
               timestamp: Date.now(),
@@ -585,7 +603,7 @@ export default function SchoolCalendarApp() {
         }
 
         await Promise.all(batchPromises);
-        alert(`匯入完成！成功新增了 ${successCount} 筆行程。`);
+        alert(`匯入完成！\n成功新增：${successCount} 筆\n忽略重複：${skipCount} 筆`);
         
       } catch (err) {
         console.error("Import failed:", err);
