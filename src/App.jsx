@@ -257,7 +257,6 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 export default function SchoolCalendarApp() {
   const [user, setUser] = useState(null);
   const [events, setEvents] = useState([]);
-  // UPDATED: Completely refreshed initial state with new keys
   const [config, setConfig] = useState({
     startDate: formatDate(new Date()), 
     endDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 6))), 
@@ -276,34 +275,30 @@ export default function SchoolCalendarApp() {
   const [selectedSection, setSelectedSection] = useState(DEPARTMENTS[0].sections[0]);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false); // New state for password modal
-  const [inputPassword, setInputPassword] = useState(""); // New state for password input
+  const [showPasswordModal, setShowPasswordModal] = useState(false); 
+  const [inputPassword, setInputPassword] = useState(""); 
   const [editingDate, setEditingDate] = useState(null);
   const [newEventContent, setNewEventContent] = useState("");
   const [filterDept, setFilterDept] = useState("ALL");
   const [viewMode, setViewMode] = useState('grid'); 
 
   // --- Helper to determine label ---
-  // Modified to remove newline (\n) and allow horizontal layout
+  // Modified to use whitespace-nowrap in CSS instead of relying on string content
   const getWeekLabel = (weekNum) => {
-    // 1. Before Semester Start (Countdown Logic)
     if (weekNum < 1) {
-      // weekNum 0 -> Pre 1, weekNum -1 -> Pre 2
       const preWeekNum = Math.abs(weekNum) + 1;
-      return `${config.preSemesterLabel || '學期前'} 第${preWeekNum}週`; // Changed \n to space
+      return `${config.preSemesterLabel || '學期前'} 第${preWeekNum}週`;
     }
 
-    // 2. Check if this week is after the semester end date
     if (config.semesterEndDate) {
       const endWeekNum = getWeekInfo(config.semesterEndDate, config.semesterStartDate);
       
       if (weekNum > endWeekNum) {
         const vacationWeekNum = weekNum - endWeekNum;
-        return `${config.postSemesterLabel || '寒假後'} 第${vacationWeekNum}週`; // Changed \n to space
+        return `${config.postSemesterLabel || '寒假後'} 第${vacationWeekNum}週`;
       }
     }
 
-    // 3. Normal semester week
     return `第${weekNum}週`;
   };
 
@@ -339,7 +334,6 @@ export default function SchoolCalendarApp() {
   useEffect(() => {
     if (!user || !db) return;
 
-    // Sync Events
     try {
       const eventsRef = collection(db, 'artifacts', appId, 'public', 'data', 'calendar_events');
       const qEvents = query(eventsRef); 
@@ -358,7 +352,6 @@ export default function SchoolCalendarApp() {
         setEvents(loadedEvents);
       }, (error) => console.error("Error fetching events:", error));
 
-      // Sync Config
       const configRef = collection(db, 'artifacts', appId, 'public', 'data', 'calendar_config');
       const unsubConfig = onSnapshot(configRef, (snapshot) => {
         if (!snapshot.empty) {
@@ -366,7 +359,6 @@ export default function SchoolCalendarApp() {
           if (serverConfig) {
             const data = serverConfig.data();
             
-            // Fix migration from old default '開學前' to new '學期前'
             let preLabel = String(data.preSemesterLabel || '學期前');
             if (preLabel === '開學前') preLabel = '學期前';
 
@@ -526,7 +518,6 @@ export default function SchoolCalendarApp() {
     URL.revokeObjectURL(url);
   };
 
-  // --- Import Logic ---
   const handleImportClick = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
@@ -538,7 +529,7 @@ export default function SchoolCalendarApp() {
     if (!file) return;
 
     if (!confirm("匯入功能將會「新增」資料到目前的行事曆中。\n\n如果您想要完全替換，請先到「設定」中執行「刪除所有行程」，再進行匯入。\n\n確定要繼續匯入嗎？")) {
-      e.target.value = ''; // Reset input
+      e.target.value = ''; 
       return;
     }
 
@@ -592,13 +583,13 @@ export default function SchoolCalendarApp() {
         console.error("Import failed:", err);
         alert("匯入失敗，請檢查檔案格式是否正確。");
       } finally {
-        e.target.value = ''; // Reset for next use
+        e.target.value = ''; 
       }
     };
     reader.readAsText(file);
   };
 
-  // --- Data Processing for Views ---
+  // --- Data Processing ---
 
   const calendarDays = useMemo(() => {
     if (!config.startDate || !config.endDate) return [];
@@ -659,8 +650,6 @@ export default function SchoolCalendarApp() {
     return weeksData; 
   }, [weeksData, filterDept]);
 
-
-  // 2. List View Data: Sorted Events with Merged Cells
   const processedList = useMemo(() => {
     let baseEvents = [...events];
     if (filterDept !== "ALL") {
@@ -883,7 +872,7 @@ export default function SchoolCalendarApp() {
             return (
               <div key={wIndex} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
-                  <span className="font-bold text-gray-800 text-sm">{weekLabel}</span>
+                  <span className="font-bold text-gray-800 whitespace-nowrap text-sm">{weekLabel}</span>
                   <span className="text-xs text-gray-600">
                     {formatDate(week[0].dateObj)} - {formatDate(week[week.length-1].dateObj)}
                   </span>
@@ -970,7 +959,7 @@ export default function SchoolCalendarApp() {
            <table className="w-full text-sm text-left border-collapse border border-black table-fixed">
              <thead className="bg-gray-100 text-gray-900 font-bold print:bg-gray-100">
                <tr>
-                 <th className="border border-black px-2 py-2 w-24 text-center">週次</th>
+                 <th className="border border-black px-2 py-2 w-28 text-center">週次</th>
                  <th className="border border-black px-2 py-2 w-24 text-center">日期</th>
                  <th className="border border-black px-2 py-2 w-auto">舉辦事項</th>
                  <th className="border border-black px-2 py-2 w-24 text-center">主辦單位</th>
@@ -991,7 +980,7 @@ export default function SchoolCalendarApp() {
                          rowSpan={event.weekRowSpan}
                        >
                          <div className="flex flex-col items-center justify-center h-full">
-                           <span className="text-base whitespace-pre-line leading-tight">
+                           <span className="text-base whitespace-nowrap leading-tight">
                              {getWeekLabel(event.weekNum)}
                            </span>
                            <span className="text-[10px] text-gray-500 mt-1">
