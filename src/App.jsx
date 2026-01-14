@@ -257,6 +257,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 export default function SchoolCalendarApp() {
   const [user, setUser] = useState(null);
   const [events, setEvents] = useState([]);
+  // UPDATED: Completely refreshed initial state with new keys
   const [config, setConfig] = useState({
     startDate: formatDate(new Date()), 
     endDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 6))), 
@@ -709,7 +710,8 @@ export default function SchoolCalendarApp() {
   // --- Render ---
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans print:bg-white flex flex-col items-center">
+    // Root container: removed flex flex-col items-center to fix layout skew
+    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans print:bg-white">
       
       <style>{`
         @media print {
@@ -732,8 +734,9 @@ export default function SchoolCalendarApp() {
       `}</style>
 
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm print:hidden w-full no-print flex justify-center">
-        <div className="w-[95%] max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm print:hidden w-full no-print">
+        {/* Container: w-full and max-w-[1920px] with mx-auto ensures centering */}
+        <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center py-4 space-y-4 md:space-y-0">
             
             <div className="flex items-center space-x-3">
@@ -854,7 +857,8 @@ export default function SchoolCalendarApp() {
       </header>
 
       {/* Main Content */}
-      <main className="w-[95%] max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none print:w-full">
+      {/* Container: w-full and max-w-[1920px] with mx-auto ensures centering */}
+      <main className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none print:w-full">
         
         <div className="hidden print:block text-center mb-6">
           <h1 className="text-2xl font-serif font-bold text-black">{String(config.semesterName)} 行事曆</h1>
@@ -872,6 +876,7 @@ export default function SchoolCalendarApp() {
             return (
               <div key={wIndex} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
+                  {/* Updated class: whitespace-nowrap ensures horizontal text */}
                   <span className="font-bold text-gray-800 whitespace-nowrap text-sm">{weekLabel}</span>
                   <span className="text-xs text-gray-600">
                     {formatDate(week[0].dateObj)} - {formatDate(week[week.length-1].dateObj)}
@@ -980,6 +985,7 @@ export default function SchoolCalendarApp() {
                          rowSpan={event.weekRowSpan}
                        >
                          <div className="flex flex-col items-center justify-center h-full">
+                           {/* Updated class: whitespace-nowrap ensures horizontal text */}
                            <span className="text-base whitespace-nowrap leading-tight">
                              {getWeekLabel(event.weekNum)}
                            </span>
