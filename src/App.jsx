@@ -37,8 +37,8 @@ import {
   FileSpreadsheet,
   Upload,
   Lock,
-  FolderOpen, // Added Folder icon
-  PlusCircle, // Added PlusCircle icon
+  FolderOpen, 
+  PlusCircle, 
   FileText
 } from 'lucide-react';
 
@@ -267,7 +267,6 @@ export default function SchoolCalendarApp() {
   
   // State: ID of the currently active calendar (file)
   const [currentVersionId, setCurrentVersionId] = useState(() => {
-    // Try to load from local storage or default
     return typeof localStorage !== 'undefined' 
       ? localStorage.getItem('schoolCalendar_versionId') || 'default' 
       : 'default';
@@ -295,12 +294,14 @@ export default function SchoolCalendarApp() {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false); 
-  const [showFileModal, setShowFileModal] = useState(false); // New modal for file management
+  const [showFileModal, setShowFileModal] = useState(false); 
   const [inputPassword, setInputPassword] = useState(""); 
   const [editingDate, setEditingDate] = useState(null);
   const [newEventContent, setNewEventContent] = useState("");
   const [filterDept, setFilterDept] = useState("ALL");
   const [viewMode, setViewMode] = useState('grid'); 
+  // State to track what action to perform after password verification
+  const [pendingAction, setPendingAction] = useState(null); // { type: 'SETTINGS' } or { type: 'DELETE_VERSION', id: '...', name: '...' }
 
   // --- Helper to determine label ---
   const getWeekLabel = (weekNum) => {
@@ -347,27 +348,22 @@ export default function SchoolCalendarApp() {
   // --- Load Version List ---
   useEffect(() => {
     if (!user || !db) return;
-    // Listen to all calendar versions to build the list
     const versionsRef = collection(db, 'artifacts', appId, 'public', 'data', 'calendar_versions');
     const q = query(versionsRef);
     const unsub = onSnapshot(q, (snap) => {
       const list = snap.docs.map(d => ({id: d.id, ...d.data()}));
       setVersionList(list);
       
-      // Migration: If no versions exist but we have old main_config, create default version
       if (list.length === 0) {
-        // Check legacy location
         getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_config', 'main_config'))
           .then(snap => {
             if (snap.exists()) {
               const legacyData = snap.data();
-              // Save as 'default' version
               setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_versions', 'default'), {
                 ...legacyData,
                 id: 'default'
               });
             } else {
-              // Create brand new default
               setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_versions', 'default'), {
                  ...config, id: 'default'
               });
@@ -382,7 +378,6 @@ export default function SchoolCalendarApp() {
   useEffect(() => {
     if (!user || !db) return;
 
-    // 1. Load Configuration for current Version ID
     const versionRef = doc(db, 'artifacts', appId, 'public', 'data', 'calendar_versions', currentVersionId);
     const unsubConfig = onSnapshot(versionRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -401,14 +396,12 @@ export default function SchoolCalendarApp() {
           semesterName: String(data.semesterName || config.semesterName)
         });
       } else {
-        // If current ID doesn't exist (deleted?), fallback to default
         if (currentVersionId !== 'default') {
           setCurrentVersionId('default');
         }
       }
     });
 
-    // 2. Load Events for current Version ID
     const eventsRef = collection(db, 'artifacts', appId, 'public', 'data', 'calendar_events');
     const qEvents = query(eventsRef); 
     
@@ -416,7 +409,6 @@ export default function SchoolCalendarApp() {
       const loadedEvents = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(e => {
-          // Compatibility: If event has no versionId, assume it belongs to 'default'
           const eventVersion = e.versionId || 'default';
           return eventVersion === currentVersionId;
         })
@@ -441,16 +433,42 @@ export default function SchoolCalendarApp() {
     e.preventDefault();
     if (inputPassword === '168') {
       setShowPasswordModal(false);
-      // Determine which modal triggered the password check (simple toggle here)
-      // Actually we need to know intent. For simplicity, password modal acts as gatekeeper for Settings.
-      // If we want it for File Manager too, we might need a state `pendingAction`.
-      // For now, let's assume it's for Settings since File Manager is public read usually?
-      // Wait, deleting files is dangerous. Let's gate Settings only for now as requested.
-      setShowConfigModal(true);
       setInputPassword(""); 
+
+      // Dispatch action based on pendingAction state
+      if (pendingAction?.type === 'SETTINGS') {
+        setShowConfigModal(true);
+      } else if (pendingAction?.type === 'DELETE_VERSION') {
+        executeDeleteVersion(pendingAction.id, pendingAction.name);
+      }
+
+      setPendingAction(null); // Reset pending action
     } else {
       alert("密碼錯誤，請重新輸入。");
       setInputPassword("");
+    }
+  };
+
+  // Wrapper for Deleting Version: Requests Password First
+  const requestDeleteVersion = (id, name) => {
+    if (id === 'default') {
+      alert("預設行事曆無法刪除！");
+      return;
+    }
+    setPendingAction({ type: 'DELETE_VERSION', id, name });
+    setShowPasswordModal(true);
+  };
+
+  const executeDeleteVersion = async (id, name) => {
+    if (!confirm(`警告：您即將刪除「${name}」這個行事曆。\n此動作將會刪除該學期的所有設定，且無法復原！\n\n確定要繼續嗎？`)) return;
+
+    try {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_versions', id));
+      alert("行事曆檔案已刪除。");
+      if (currentVersionId === id) handleSwitchVersion('default');
+    } catch (err) {
+      console.error("Delete version failed", err);
+      alert("刪除失敗");
     }
   };
 
@@ -468,7 +486,6 @@ export default function SchoolCalendarApp() {
         postSemesterLabel: config.postSemesterLabel,
         semesterName: config.semesterName
       };
-      // Save to calendar_versions collection
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_versions', currentVersionId), cleanConfig);
       setShowConfigModal(false);
     } catch (err) {
@@ -480,7 +497,7 @@ export default function SchoolCalendarApp() {
     if (!newEventContent.trim() || !user || !db) return;
 
     const newEvent = {
-      versionId: currentVersionId, // Associate with current calendar
+      versionId: currentVersionId, 
       date: editingDate,
       content: String(newEventContent), 
       department: selectedDept.name,
@@ -547,7 +564,7 @@ export default function SchoolCalendarApp() {
       ...config,
       id: newId,
       semesterName: name,
-      startDate: formatDate(new Date()), // Default to today to avoid confusion
+      startDate: formatDate(new Date()), 
       endDate: formatDate(new Date(new Date().setMonth(new Date().getMonth() + 6)))
     };
 
@@ -557,38 +574,6 @@ export default function SchoolCalendarApp() {
     } catch (err) {
       console.error("Create new version failed", err);
       alert("建立失敗");
-    }
-  };
-
-  const handleDeleteVersion = async (id, name) => {
-    if (id === 'default') {
-      alert("預設行事曆無法刪除！");
-      return;
-    }
-    if (!confirm(`確定要刪除「${name}」這個行事曆嗎？\n裡面的所有行程都會被刪除，且無法復原！`)) return;
-
-    try {
-      // 1. Delete Config
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendar_versions', id));
-      
-      // 2. Delete Events associated with this version
-      // Note: In a real app we'd use a server function. Client side we must query first.
-      const eventsRef = collection(db, 'artifacts', appId, 'public', 'data', 'calendar_events');
-      // We can't use compound queries easily here due to constraints, so fetch and filter is okay for small datasets
-      // But we are deleting, so we need to be careful.
-      // To be safe, we only delete events we can see if we were to switch to it.
-      // But since we can't switch to a deleted ID, we should query specifically.
-      // Let's rely on the user to have cleared events or just leave them orphaned (they won't show up).
-      // Or: Query events where versionId == id
-      // Since RULE 2 says no complex queries, we fetch all? No, that's too much.
-      // Let's just leave the events orphaned for now to avoid accidental mass deletion of wrong data.
-      // Or better: The user should clear events inside it before deleting.
-      
-      alert("行事曆檔案已刪除。");
-      if (currentVersionId === id) handleSwitchVersion('default');
-    } catch (err) {
-      console.error("Delete version failed", err);
-      alert("刪除失敗");
     }
   };
 
@@ -692,7 +677,7 @@ export default function SchoolCalendarApp() {
             }
 
             const newEvent = {
-              versionId: currentVersionId, // Bind to current calendar version
+              versionId: currentVersionId, 
               date: dbDate,
               content: content, 
               department: dept,
@@ -874,7 +859,10 @@ export default function SchoolCalendarApp() {
                 <div className="flex items-center space-x-3">
                    <div 
                     className="flex items-center space-x-2 text-sm text-gray-500 cursor-pointer hover:text-indigo-600 transition-colors"
-                    onClick={() => setShowPasswordModal(true)}
+                    onClick={() => {
+                      setPendingAction({ type: 'SETTINGS' });
+                      setShowPasswordModal(true);
+                    }}
                   >
                     <span className="font-bold">{String(config.semesterName || '未命名')}</span>
                     <Settings className="w-3 h-3" />
@@ -1207,8 +1195,9 @@ export default function SchoolCalendarApp() {
                     )}
                     {v.id !== 'default' && (
                       <button 
-                        onClick={() => handleDeleteVersion(v.id, v.semesterName)}
+                        onClick={() => requestDeleteVersion(v.id, v.semesterName)}
                         className="p-1 text-red-500 hover:bg-red-50 rounded"
+                        title="刪除 (需密碼)"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
