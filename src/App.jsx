@@ -15,9 +15,7 @@ import {
   onSnapshot, 
   query, 
   orderBy,
-  getDoc,
-  getDocs,
-  writeBatch
+  getDoc
 } from 'firebase/firestore';
 import { 
   Calendar, 
@@ -37,9 +35,8 @@ import {
   FileSpreadsheet,
   Upload,
   Lock,
-  FolderOpen, 
-  PlusCircle, 
-  FileText
+  FolderOpen,
+  PlusCircle
 } from 'lucide-react';
 
 // --- Firebase Configuration & Initialization ---
@@ -69,12 +66,14 @@ try {
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // --- Constants & Data ---
+// 更新顏色設定：
+// 教務處:紅, 學務處:粉, 總務處:藍, 輔導室:綠, 人事室:咖啡
 const DEPARTMENTS = [
   { 
     name: '教務處', 
     color: 'bg-red-100 border-red-200', 
     textClass: 'text-red-700 font-bold', 
-    sections: ['教學組', '註冊組', '設備組', '資訊組', '導師', '各主任', '各處室', '全校'] 
+    sections: ['教學組', '註冊組', '設備組', '資訊組', '導師', '各主任', '各處室', '各領域', '全校'] 
   },
   { 
     name: '學務處', 
@@ -96,8 +95,8 @@ const DEPARTMENTS = [
   },
   { 
     name: '人事室', 
-    color: 'bg-amber-100 border-amber-200',
-    textClass: 'text-amber-800 font-bold',
+    color: 'bg-amber-100 border-amber-200', 
+    textClass: 'text-amber-800 font-bold', 
     sections: ['人事室', '各主任', '各處室', '全校'] 
   },
   { 
@@ -154,6 +153,7 @@ const getDatesInRange = (startDate, endDate) => {
   return dates;
 };
 
+// Calculate week number relative to the Semester Start Date
 const getWeekInfo = (dateStr, semesterStartDateStr) => {
   const d = new Date(dateStr);
   const start = new Date(semesterStartDateStr || dateStr);
@@ -169,6 +169,7 @@ const getWeekInfo = (dateStr, semesterStartDateStr) => {
   return Math.floor(diffDays / 7) + 1;
 };
 
+// Calculate week date range string
 const getWeekRangeString = (weekNum, semesterStartDateStr) => {
   const start = new Date(semesterStartDateStr);
   const startDay = start.getDay();
@@ -190,6 +191,7 @@ const getWeekRangeString = (weekNum, semesterStartDateStr) => {
   return `${formatSimple(weekStart)}~${formatSimple(weekEnd)}`;
 };
 
+// Simple CSV Line Parser (handles quotes)
 const parseCSVLine = (text) => {
   const result = [];
   let cell = '';
@@ -199,7 +201,7 @@ const parseCSVLine = (text) => {
     if (c === '"') {
       if (inQuote && text[i + 1] === '"') {
         cell += '"';
-        i++; 
+        i++; // skip escaped quote
       } else {
         inQuote = !inQuote;
       }
@@ -214,6 +216,7 @@ const parseCSVLine = (text) => {
   return result;
 };
 
+// Smart Date Parser for Import
 const parseImportDate = (datePart, startDateStr, endDateStr) => {
   const match = datePart.match(/(\d{1,2})[\/-](\d{1,2})/);
   if (!match) return null;
@@ -242,6 +245,7 @@ const parseImportDate = (datePart, startDateStr, endDateStr) => {
 
 // --- Components ---
 
+// Modal Component
 const Modal = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
   return (
@@ -301,7 +305,7 @@ export default function SchoolCalendarApp() {
   const [filterDept, setFilterDept] = useState("ALL");
   const [viewMode, setViewMode] = useState('grid'); 
   // State to track what action to perform after password verification
-  const [pendingAction, setPendingAction] = useState(null); // { type: 'SETTINGS' } or { type: 'DELETE_VERSION', id: '...', name: '...' }
+  const [pendingAction, setPendingAction] = useState(null); 
 
   // --- Helper to determine label ---
   const getWeekLabel = (weekNum) => {
@@ -435,21 +439,19 @@ export default function SchoolCalendarApp() {
       setShowPasswordModal(false);
       setInputPassword(""); 
 
-      // Dispatch action based on pendingAction state
       if (pendingAction?.type === 'SETTINGS') {
         setShowConfigModal(true);
       } else if (pendingAction?.type === 'DELETE_VERSION') {
         executeDeleteVersion(pendingAction.id, pendingAction.name);
       }
 
-      setPendingAction(null); // Reset pending action
+      setPendingAction(null); 
     } else {
       alert("密碼錯誤，請重新輸入。");
       setInputPassword("");
     }
   };
 
-  // Wrapper for Deleting Version: Requests Password First
   const requestDeleteVersion = (id, name) => {
     if (id === 'default') {
       alert("預設行事曆無法刪除！");
@@ -548,7 +550,6 @@ export default function SchoolCalendarApp() {
     }
   };
 
-  // --- Version Management Logic ---
   const handleSwitchVersion = (id) => {
     setCurrentVersionId(id);
     localStorage.setItem('schoolCalendar_versionId', id);
@@ -559,7 +560,7 @@ export default function SchoolCalendarApp() {
     const name = prompt("請輸入新行事曆名稱 (例如：114學年度第一學期)：");
     if (!name) return;
     
-    const newId = Date.now().toString(); // Simple ID
+    const newId = Date.now().toString(); 
     const newConfig = {
       ...config,
       id: newId,
@@ -707,31 +708,26 @@ export default function SchoolCalendarApp() {
     reader.readAsText(file);
   };
 
+  // --- Data Processing ---
+
   const calendarDays = useMemo(() => {
     if (!config.startDate || !config.endDate) return [];
-    
     try {
       const start = new Date(config.startDate);
       const end = new Date(config.endDate);
-      
       if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
-
       const startDay = start.getDay(); 
       const displayStart = new Date(start);
       displayStart.setDate(start.getDate() - startDay);
-
       const endDay = end.getDay(); 
       const displayEnd = new Date(end);
       displayEnd.setDate(end.getDate() + (6 - endDay));
-
       const dates = getDatesInRange(formatDate(displayStart), formatDate(displayEnd));
-      
       return dates.map(date => {
         const dateStr = formatDate(date);
         const dayEvents = events.filter(e => e.date === dateStr);
         const inSemester = dateStr >= config.startDate && dateStr <= config.endDate;
         const weekNum = getWeekInfo(dateStr, config.semesterStartDate || config.startDate);
-
         return {
           dateObj: date,
           dateStr,
@@ -750,7 +746,6 @@ export default function SchoolCalendarApp() {
   const weeksData = useMemo(() => {
     const weeks = [];
     let currentWeek = [];
-    
     calendarDays.forEach((day, index) => {
       currentWeek.push(day);
       if (day.dayOfWeek === 6 || index === calendarDays.length - 1) {
@@ -784,9 +779,7 @@ export default function SchoolCalendarApp() {
     const result = [];
     for (let i = 0; i < enriched.length; i++) {
       const current = { ...enriched[i] }; 
-      
       const prev = i > 0 ? enriched[i - 1] : null;
-      
       if (!prev || prev.weekNum !== current.weekNum) {
         let span = 1;
         for (let j = i + 1; j < enriched.length; j++) {
@@ -800,7 +793,6 @@ export default function SchoolCalendarApp() {
       } else {
         current.weekRowSpan = 0; 
       }
-
       if (!prev || prev.date !== current.date) {
         let span = 1;
         for (let k = i + 1; k < enriched.length; k++) {
@@ -814,10 +806,8 @@ export default function SchoolCalendarApp() {
       } else {
         current.dateRowSpan = 0;
       }
-
       result.push(current);
     }
-
     return result;
   }, [events, filterDept, config.startDate, config.semesterStartDate]);
 
@@ -874,7 +864,7 @@ export default function SchoolCalendarApp() {
                     title="切換或管理行事曆檔案"
                   >
                     <FolderOpen className="w-3 h-3" />
-                    <span>檔案</span>
+                    <span className="whitespace-nowrap">檔案</span>
                   </button>
                 </div>
               </div>
